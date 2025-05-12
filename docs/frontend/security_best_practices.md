@@ -1,0 +1,1 @@
+/home/stvwhite/projects/artcafe/artcafe-pubsub/docs/frontend/security_best_practices.md

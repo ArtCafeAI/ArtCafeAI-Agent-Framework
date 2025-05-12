@@ -1,0 +1,1 @@
+/home/stvwhite/projects/artcafe/artcafe-pubsub/docs/frontend/frontend_architecture.md

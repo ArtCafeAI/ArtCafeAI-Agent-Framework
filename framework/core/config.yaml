@@ -1,0 +1,81 @@
+# ArtCafe Agent Framework Configuration
+
+# Endpoint Configuration
+api:
+  endpoint: "https://api.artcafe.ai"
+  version: "v1"
+  websocket_endpoint: "wss://api.artcafe.ai/ws"
+
+# Authentication
+auth:
+  # Agent identity
+  agent_id: ""  # Will be generated if not provided
+  tenant_id: ""  # Required for multi-tenant setup
+  
+  # SSH Key Authentication
+  ssh_key:
+    private_key_path: "~/.ssh/artcafe_agent"
+    key_type: "agent"  # Options: agent, access, deployment
+  
+  # Connection settings
+  retry_attempts: 5
+  retry_delay: 1000  # milliseconds
+  token_refresh_margin: 300  # seconds
+
+# Messaging
+messaging:
+  provider: "memory"  # Options: memory, aws_iot, artcafe_pubsub
+  heartbeat_interval: 30  # seconds
+  batch_size: 10
+  message_ttl: 3600  # seconds
+
+# LLM Integration
+llm:
+  provider: "anthropic"  # Options: anthropic, openai, bedrock, local
+  model: "claude-3-opus-20240229"
+  api_key: ""  # Required for cloud providers
+  
+  # Provider-specific settings
+  anthropic:
+    api_endpoint: "https://api.anthropic.com"
+    max_tokens: 4096
+    temperature: 0.7
+  
+  openai:
+    api_endpoint: "https://api.openai.com"
+    model: "gpt-4"
+    max_tokens: 4096
+    temperature: 0.7
+  
+  bedrock:
+    region: "us-west-2"
+    model_id: "anthropic.claude-3-opus-20240229"
+    max_tokens: 4096
+    temperature: 0.7
+  
+  local:
+    endpoint: "http://localhost:8000"
+    model: "local-model"
+
+# Logging
+logging:
+  level: "INFO"  # Options: DEBUG, INFO, WARNING, ERROR
+  format: "%(asctime)s - %(name)s - %(levelname)s - %(message)s"
+  file: ""  # Leave empty for console logging
+  max_size: 10  # MB
+  backup_count: 5
+
+# Security
+security:
+  validate_server_cert: true
+  sensitive_keys:
+    - "api_key"
+    - "private_key"
+    - "token"
+    - "password"
+
+# Resources
+resources:
+  cpu_limit: 0  # 0 means no limit
+  memory_limit: 0  # 0 means no limit
+  storage_path: "~/.artcafe/storage"

@@ -14,6 +14,15 @@ The Agent Framework is a key component of the ArtCafe.ai platform, providing the
 
 The framework implements a clean, extensible architecture with well-defined interfaces and pluggable components, making it easy to customize and extend.
 
+## New Multi-Tenant Support
+
+We've enhanced the framework with full multi-tenant support:
+
+- **SSH Key Authentication**: Secure agent identity management using SSH keys
+- **ArtCafe.ai PubSub Integration**: Connect directly to the ArtCafe.ai pub/sub service
+- **Tenant Isolation**: Ensure data and messages are properly isolated between tenants
+- **Web Portal Support**: Register and manage agents through the ArtCafe.ai web portal
+
 ## Architecture
 
 ### Core Components
@@ -21,7 +30,8 @@ The framework implements a clean, extensible architecture with well-defined inte
 - **BaseAgent**: Abstract base class that defines the agent lifecycle and messaging patterns
 - **EnhancedAgent**: Extension with integrated messaging, configuration, and advanced features
 - **MessagingInterface**: Abstraction layer for all messaging operations
-- **Provider Pattern**: Support for different messaging backends (in-memory, AWS IoT, etc.)
+- **Provider Pattern**: Support for different messaging backends (in-memory, AWS IoT, ArtCafe PubSub)
+- **LLM Integration**: Pluggable LLM providers (Anthropic, OpenAI, Bedrock)
 
 ### Directory Structure
 
@@ -29,20 +39,22 @@ The framework implements a clean, extensible architecture with well-defined inte
 /agent_framework/
 ├── agents/                 # Agent implementations
 ├── framework/              # Core framework code
-│   ├── auth/               # Authentication providers
+│   ├── auth/               # Authentication providers (SSH, token)
 │   ├── core/               # Base agent classes and configuration
 │   ├── examples/           # Example agent implementations
 │   ├── knowledge/          # Knowledge integration components
+│   ├── llm/                # LLM provider implementations
 │   ├── messaging/          # Messaging providers and interfaces
 │   └── mcp/                # Management control plane integration
 ├── main.py                 # Main entry point for running agents
+├── setup_agent.py          # Setup script for configuring agents
 ├── mocks/                  # Mock data and services for testing
 └── utils/                  # Utility functions for agents
 ```
 
 ## Quick Start
 
-### Installation
+### Setup
 
 1. Ensure you have Python 3.8+ installed
 2. Clone the repository and navigate to the agent_framework directory
@@ -50,91 +62,148 @@ The framework implements a clean, extensible architecture with well-defined inte
    ```bash
    pip install -r requirements.txt
    ```
+4. Run the setup script:
+   ```bash
+   ./setup_agent.py --interactive
+   ```
+   
+This script will:
+1. Generate an SSH key pair for your agent
+2. Create a configuration file with your agent details
+3. Display next steps for registering your agent with ArtCafe.ai
 
-### Running the Example
+### Manual Configuration
 
-The framework includes example implementations that demonstrate the core functionality:
+If you prefer to set up manually:
+
+1. Create an SSH key pair for your agent:
+   ```bash
+   ssh-keygen -t rsa -b 4096 -f ~/.ssh/artcafe_agent
+   ```
+
+2. Create a configuration file (`~/.artcafe/config.yaml`):
+   ```yaml
+   api:
+     endpoint: "https://api.artcafe.ai"
+     version: "v1"
+     websocket_endpoint: "wss://api.artcafe.ai/ws"
+   
+   auth:
+     agent_id: "your-agent-id"     # From ArtCafe.ai portal
+     tenant_id: "your-tenant-id"   # From ArtCafe.ai portal
+     ssh_key:
+       private_key_path: "~/.ssh/artcafe_agent"
+       key_type: "agent"
+   
+   messaging:
+     provider: "artcafe_pubsub"
+     heartbeat_interval: 30
+   
+   llm:
+     provider: "anthropic"
+     model: "claude-3-opus-20240229"
+     api_key: ""  # Set via ANTHROPIC_API_KEY environment variable
+   ```
+
+3. Register your agent and SSH key on the ArtCafe.ai portal
+
+### Running an Agent
 
 ```bash
-python main.py --run-time 30
+# Using the enhanced example
+python -m framework.examples.enhanced_runner --config ~/.artcafe/config.yaml
+
+# Using the standard examples
+python main.py --config ~/.artcafe/config.yaml
 ```
 
-This will:
-1. Initialize the system with default settings
-2. Create and start two agents (triage and investigative)
-3. Process simulated security findings
-4. Generate a comprehensive report of agent interactions
-
-### Using the Enhanced Examples
-
-For a more advanced example using the enhanced agent classes:
-
-```bash
-python -m framework.examples.enhanced_runner --run-time 30
-```
-
-## Creating Your Own Agents
+## Creating Custom Agents
 
 1. Create a new agent class that extends `EnhancedAgent`:
 
 ```python
 from framework.core.enhanced_agent import EnhancedAgent
+from framework.llm import get_llm_provider
 
 class MyCustomAgent(EnhancedAgent):
     def __init__(self, agent_id=None, config=None):
         super().__init__(agent_id=agent_id, agent_type="custom", config=config)
         self.add_capability("custom_processing")
+        
+        # Initialize LLM provider
+        self.llm = get_llm_provider(self.config.get("llm", {}))
     
     def _setup_subscriptions(self):
         # Subscribe to relevant topics
         self.subscribe("data/input/#")
     
-    def process_message(self, topic, message):
+    async def process_message(self, topic, message):
         # Process incoming messages
-        if super().process_message(topic, message):
+        if await super().process_message(topic, message):
             # Handle custom processing logic
             data = message.get("data", {})
-            result = self._process_data(data)
+            result = await self._process_data(data)
             
             # Publish results
-            self.publish("data/results", result)
+            await self.publish("data/results", result)
             return True
         return False
     
-    def _process_data(self, data):
-        # Custom processing logic
-        return {"processed": True, "result": "Success"}
+    async def _process_data(self, data):
+        # Custom processing logic using LLM
+        response = await self.llm.generate(
+            prompt=f"Process this data: {data}",
+            system="You are a helpful AI assistant."
+        )
+        
+        return {"processed": True, "result": response["data"]["content"]}
 ```
 
 2. Create a runner script to start your agent:
 
 ```python
-import time
+import asyncio
+import logging
 from my_custom_agent import MyCustomAgent
+from framework.core.config_loader import ConfigLoader
 
-def main():
+async def main():
+    # Load configuration
+    config_loader = ConfigLoader()
+    config = config_loader.load(config_file="~/.artcafe/config.yaml")
+    
     # Create and start the agent
-    agent = MyCustomAgent()
-    agent.start()
+    agent = MyCustomAgent(config=config)
+    await agent.start()
     
     try:
         # Keep the agent running
         while True:
-            time.sleep(1)
+            await asyncio.sleep(1)
     except KeyboardInterrupt:
         print("Stopping agent...")
     finally:
-        agent.stop()
+        await agent.stop()
 
 if __name__ == "__main__":
-    main()
+    logging.basicConfig(level=logging.INFO)
+    asyncio.run(main())
 ```
 
 ## Key Features
 
+### Multi-Tenant Authentication
+
+Agents authenticate securely using SSH keys and a challenge-response flow:
+
+1. Agent requests a challenge from the ArtCafe.ai API
+2. Agent signs the challenge with its private key
+3. Server verifies the signature using the registered public key
+4. Server issues a JWT token for subsequent API calls
+
 ### Topic-Based Communication
 
-Agents communicate through a topic-based messaging system, where topics are organized in a hierarchical structure:
+Agents communicate through a topic-based messaging system with a hierarchical structure:
 
 - `agents/control/{agent_id}/#`: Control messages for a specific agent
 - `agents/status/{agent_id}`: Status reports from an agent
@@ -142,66 +211,24 @@ Agents communicate through a topic-based messaging system, where topics are orga
 - `agents/discovery/requests`: Agent discovery requests
 - `agents/discovery/responses`: Agent discovery responses
 
-### Permission Model
+### LLM Integration
 
-The framework includes a fine-grained permission model that controls what topics an agent can publish to or subscribe to:
+The framework provides a flexible LLM integration layer:
 
-```python
-# Create a token with specific permissions
-token = create_token("agent-id", [
-    "publish:data/results/#",
-    "subscribe:data/input/#",
-    "subscribe:agents/broadcast/#"
-])
-```
+- Multiple provider support (Anthropic, OpenAI, Bedrock)
+- Easy switching between models
+- Standardized interface for text generation and embeddings
+- Automatic token counting and optimization
 
-### Agent Discovery
+## Web Portal Integration
 
-Agents can discover other agents with specific capabilities:
+Agents can be managed through the ArtCafe.ai web portal:
 
-```python
-# Publish a discovery request
-self.publish("agents/discovery/requests", {
-    "request_id": str(uuid.uuid4()),
-    "agent_type": "processor",
-    "capabilities": ["data_processing", "text_analysis"],
-    "timestamp": time.time()
-})
-
-# Set up a handler for responses
-self.subscribe("agents/discovery/responses", self._handle_discovery_response)
-```
-
-### Resource Authorization
-
-Control access to resources:
-
-```python
-# Add resource authorizations
-agent.add_resource_authorization("finding", ["read", "write", "update"])
-agent.add_resource_authorization("alert", ["create"])
-
-# Check authorization
-if agent.authorize_resource("finding", finding_id, "update"):
-    # Proceed with the update
-    pass
-```
-
-## Integration with PubSub
-
-The Agent Framework integrates seamlessly with the ArtCafe.ai PubSub system, using a provider architecture:
-
-1. **In-Memory Provider**: For local development and testing
-2. **AWS IoT Provider**: For production deployment on AWS
-3. Custom providers: Implement the `MessagingProvider` interface for your own backends
-
-To specify which provider to use:
-
-```python
-config = AgentConfig()
-config.set("messaging.provider", "aws_iot")
-agent = EnhancedAgent(config=config)
-```
+- Register agents and generate IDs
+- Manage SSH keys for authentication
+- Monitor agent status and activity
+- Configure agent parameters
+- View logs and metrics
 
 ## Contributing
 
