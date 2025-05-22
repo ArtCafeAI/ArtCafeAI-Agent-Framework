@@ -1,12 +1,27 @@
 # ArtCafe.ai Agent Framework
 
-A flexible, modular framework for building intelligent agents that communicate through our pub/sub messaging system. The framework is designed to simplify the creation of collaborative agent networks while providing robust lifecycle management, messaging, and configuration capabilities.
+<div align="center">
+  <img src="https://artcafe.ai/img/logo/artcafe-logo.png" alt="ArtCafe.ai Logo" width="200"/>
+  <h3>A flexible, modular framework for building intelligent, collaborative AI agents</h3>
+</div>
+
+<div align="center">
+  <a href="https://opensource.org/licenses/MIT">
+    <img src="https://img.shields.io/badge/License-MIT-yellow.svg" alt="License: MIT">
+  </a>
+  <a href="https://python.org">
+    <img src="https://img.shields.io/badge/Python-3.8+-blue.svg" alt="Python 3.8+">
+  </a>
+  <img src="https://img.shields.io/badge/pypi-v0.3.0-blue" alt="PyPI version">
+</div>
+
+<br/>
 
 ## Overview
 
 The Agent Framework is a key component of the ArtCafe.ai platform, providing the foundation for building intelligent agents that can:
 
-- Communicate over the pub/sub messaging system
+- Communicate through a pub/sub messaging system
 - Discover and collaborate with other agents
 - Process complex data and make decisions
 - Self-report status and health metrics
@@ -14,23 +29,95 @@ The Agent Framework is a key component of the ArtCafe.ai platform, providing the
 
 The framework implements a clean, extensible architecture with well-defined interfaces and pluggable components, making it easy to customize and extend.
 
-## New Multi-Tenant Support
+## Key Features
 
-We've enhanced the framework with full multi-tenant support:
+- **Lightweight Agent Core**: Base agent classes with essential functionality
+- **Flexible Messaging**: Multiple messaging backends (memory, pub/sub, etc.)
+- **LLM Integration**: Plug-and-play support for leading LLM providers
+- **Tool Framework**: Decorator-based tool creation and registry
+- **Event Loop Architecture**: Structured flow for agent-LLM interactions
+- **Conversation Management**: Context window management for LLM interactions
+- **MCP Support**: Integration with Model Context Protocol servers
+- **Telemetry & Tracing**: Built-in metrics collection and tracing
 
-- **SSH Key Authentication**: Secure agent identity management using SSH keys
-- **ArtCafe.ai PubSub Integration**: Connect directly to the ArtCafe.ai pub/sub service
-- **Tenant Isolation**: Ensure data and messages are properly isolated between tenants
-- **Web Portal Support**: Register and manage agents through the ArtCafe.ai web portal
+## Installation
+
+```bash
+# Install from source
+git clone https://github.com/artcafeai/artcafe-agent-framework.git
+cd artcafe-agent-framework
+pip install -e .
+
+# Or install with optional dependencies
+pip install -e ".[llm-providers,dev]"
+```
+
+## Quick Start
+
+Here's a minimal example of creating an agent with the ArtCafe.ai Agent Framework:
+
+```python
+from artcafe.framework.core.enhanced_agent import EnhancedAgent
+from artcafe.framework.tools import tool
+from artcafe.framework.llm import get_llm_provider
+
+# Create a simple tool with the @tool decorator
+@tool
+def calculate_sum(a: int, b: int) -> int:
+    """
+    Calculate the sum of two numbers.
+    
+    Args:
+        a: First number
+        b: Second number
+        
+    Returns:
+        Sum of the two numbers
+    """
+    return a + b
+
+# Create a simple agent
+class MathAgent(EnhancedAgent):
+    def __init__(self, agent_id=None, config=None):
+        super().__init__(agent_id=agent_id, agent_type="math", config=config)
+        self.add_capability("basic_math")
+        
+        # Initialize LLM provider
+        self.llm = get_llm_provider(self.config.get("llm", {}))
+    
+    async def process_message(self, topic, message):
+        # Handle parent processing
+        if await super().process_message(topic, message):
+            # Add custom processing logic
+            if topic == "math/calculate":
+                result = await self._process_calculation(message)
+                await self.publish("math/results", result)
+                return True
+        return False
+    
+    async def _process_calculation(self, message):
+        # Use LLM to understand the math problem
+        prompt = f"Understand this math problem: {message.get('problem')}"
+        response = await self.llm.generate(prompt=prompt)
+        
+        # Generate a response
+        return {
+            "problem": message.get("problem"),
+            "solution": response["data"]["content"],
+            "agent_id": self.agent_id
+        }
+```
 
 ## Architecture
+
+The ArtCafe.ai Agent Framework is built on a modular architecture with these key components:
 
 ### Core Components
 
 - **BaseAgent**: Abstract base class that defines the agent lifecycle and messaging patterns
 - **EnhancedAgent**: Extension with integrated messaging, configuration, and advanced features
 - **MessagingInterface**: Abstraction layer for all messaging operations
-- **Provider Pattern**: Support for different messaging backends (in-memory, AWS IoT, ArtCafe PubSub)
+- **Provider Pattern**: Support for different messaging backends (in-memory, pub/sub)
 - **LLM Integration**: Pluggable LLM providers (Anthropic, OpenAI, Bedrock)
 
 ### Directory Structure
@@ -39,201 +126,38 @@ We've enhanced the framework with full multi-tenant support:
 /agent_framework/
 ├── agents/                 # Agent implementations
 ├── framework/              # Core framework code
-│   ├── auth/               # Authentication providers (SSH, token)
-│   ├── core/               # Base agent classes and configuration
+│   ├── auth/               # Authentication providers
+│   ├── conversation/       # Conversation management
+│   ├── core/               # Base agent classes
+│   ├── event_loop/         # Event loop architecture
 │   ├── examples/           # Example agent implementations
-│   ├── knowledge/          # Knowledge integration components
 │   ├── llm/                # LLM provider implementations
-│   ├── messaging/          # Messaging providers and interfaces
-│   └── mcp/                # Management control plane integration
-├── main.py                 # Main entry point for running agents
-├── setup_agent.py          # Setup script for configuring agents
-├── mocks/                  # Mock data and services for testing
-└── utils/                  # Utility functions for agents
+│   ├── mcp/                # Model Context Protocol
+│   ├── messaging/          # Messaging providers
+│   ├── telemetry/          # Metrics and tracing
+│   └── tools/              # Tool decorator and registry
+├── main.py                 # Main entry point
+└── setup_agent.py          # Setup script
 ```
 
-## Quick Start
+## Advanced Topics
 
-### Setup
+For more advanced usage, check out the example scripts in the `examples/` directory. These demonstrate:
 
-1. Ensure you have Python 3.8+ installed
-2. Clone the repository and navigate to the agent_framework directory
-3. Install dependencies:
-   ```bash
-   pip install -r requirements.txt
-   ```
-4. Run the setup script:
-   ```bash
-   ./setup_agent.py --interactive
-   ```
-   
-This script will:
-1. Generate an SSH key pair for your agent
-2. Create a configuration file with your agent details
-3. Display next steps for registering your agent with ArtCafe.ai
-
-### Manual Configuration
-
-If you prefer to set up manually:
-
-1. Create an SSH key pair for your agent:
-   ```bash
-   ssh-keygen -t rsa -b 4096 -f ~/.ssh/artcafe_agent
-   ```
-
-2. Create a configuration file (`~/.artcafe/config.yaml`):
-   ```yaml
-   api:
-     endpoint: "https://api.artcafe.ai"
-     version: "v1"
-     websocket_endpoint: "wss://api.artcafe.ai/ws"
-   
-   auth:
-     agent_id: "your-agent-id"     # From ArtCafe.ai portal
-     tenant_id: "your-tenant-id"   # From ArtCafe.ai portal
-     ssh_key:
-       private_key_path: "~/.ssh/artcafe_agent"
-       key_type: "agent"
-   
-   messaging:
-     provider: "artcafe_pubsub"
-     heartbeat_interval: 30
-   
-   llm:
-     provider: "anthropic"
-     model: "claude-3-opus-20240229"
-     api_key: ""  # Set via ANTHROPIC_API_KEY environment variable
-   ```
-
-3. Register your agent and SSH key on the ArtCafe.ai portal
-
-### Running an Agent
-
-```bash
-# Using the enhanced example
-python -m framework.examples.enhanced_runner --config ~/.artcafe/config.yaml
-
-# Using the standard examples
-python main.py --config ~/.artcafe/config.yaml
-```
-
-## Creating Custom Agents
-
-1. Create a new agent class that extends `EnhancedAgent`:
-
-```python
-from framework.core.enhanced_agent import EnhancedAgent
-from framework.llm import get_llm_provider
-
-class MyCustomAgent(EnhancedAgent):
-    def __init__(self, agent_id=None, config=None):
-        super().__init__(agent_id=agent_id, agent_type="custom", config=config)
-        self.add_capability("custom_processing")
-        
-        # Initialize LLM provider
-        self.llm = get_llm_provider(self.config.get("llm", {}))
-    
-    def _setup_subscriptions(self):
-        # Subscribe to relevant topics
-        self.subscribe("data/input/#")
-    
-    async def process_message(self, topic, message):
-        # Process incoming messages
-        if await super().process_message(topic, message):
-            # Handle custom processing logic
-            data = message.get("data", {})
-            result = await self._process_data(data)
-            
-            # Publish results
-            await self.publish("data/results", result)
-            return True
-        return False
-    
-    async def _process_data(self, data):
-        # Custom processing logic using LLM
-        response = await self.llm.generate(
-            prompt=f"Process this data: {data}",
-            system="You are a helpful AI assistant."
-        )
-        
-        return {"processed": True, "result": response["data"]["content"]}
-```
-
-2. Create a runner script to start your agent:
-
-```python
-import asyncio
-import logging
-from my_custom_agent import MyCustomAgent
-from framework.core.config_loader import ConfigLoader
-
-async def main():
-    # Load configuration
-    config_loader = ConfigLoader()
-    config = config_loader.load(config_file="~/.artcafe/config.yaml")
-    
-    # Create and start the agent
-    agent = MyCustomAgent(config=config)
-    await agent.start()
-    
-    try:
-        # Keep the agent running
-        while True:
-            await asyncio.sleep(1)
-    except KeyboardInterrupt:
-        print("Stopping agent...")
-    finally:
-        await agent.stop()
-
-if __name__ == "__main__":
-    logging.basicConfig(level=logging.INFO)
-    asyncio.run(main())
-```
-
-## Key Features
-
-### Multi-Tenant Authentication
-
-Agents authenticate securely using SSH keys and a challenge-response flow:
-
-1. Agent requests a challenge from the ArtCafe.ai API
-2. Agent signs the challenge with its private key
-3. Server verifies the signature using the registered public key
-4. Server issues a JWT token for subsequent API calls
-
-### Topic-Based Communication
-
-Agents communicate through a topic-based messaging system with a hierarchical structure:
-
-- `agents/control/{agent_id}/#`: Control messages for a specific agent
-- `agents/status/{agent_id}`: Status reports from an agent
-- `agents/presence/online`: Agent presence announcements
-- `agents/discovery/requests`: Agent discovery requests
-- `agents/discovery/responses`: Agent discovery responses
-
-### LLM Integration
-
-The framework provides a flexible LLM integration layer:
-
-- Multiple provider support (Anthropic, OpenAI, Bedrock)
-- Easy switching between models
-- Standardized interface for text generation and embeddings
-- Automatic token counting and optimization
-
-## Web Portal Integration
-
-Agents can be managed through the ArtCafe.ai web portal:
-
-- Register agents and generate IDs
-- Manage SSH keys for authentication
-- Monitor agent status and activity
-- Configure agent parameters
-- View logs and metrics
+- Building multi-agent systems
+- Customizing LLM providers
+- Creating tool libraries
+- Implementing custom messaging backends
+- Integrating with external services
 
 ## Contributing
 
-We welcome contributions to the Agent Framework! Please see the CONTRIBUTING.md file for guidelines.
+We welcome contributions to the Agent Framework! Please see the [Contributing Guide](CONTRIBUTING.md) for details on how to get involved.
 
 ## License
 
-This project is proprietary and confidential. All rights reserved.
+This project is licensed under the MIT License - see the [LICENSE](LICENSE) file for details.
+
+## About ArtCafe.ai
+
+[ArtCafe.ai](https://artcafe.ai) is building the future of AI collaboration by providing tools, frameworks, and infrastructure for creating and deploying intelligent agent systems. Our mission is to make AI agents accessible, composable, and useful for real-world tasks.

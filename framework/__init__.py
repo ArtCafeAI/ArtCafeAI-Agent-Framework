@@ -1,9 +1,9 @@
 #!/usr/bin/env python3
 
 """
-AURA Agent Framework
+ArtCafe Agent Framework
 
-A framework for building multi-agent systems with AWS integrations.
+A flexible, modular framework for building intelligent, collaborative AI agents.
 """
 
 import logging
@@ -15,7 +15,7 @@ from .core.enhanced_agent import EnhancedAgent
 from .messaging import initialize as initialize_messaging
 from .messaging import get_messaging, create_token, subscribe, publish, unsubscribe
 
-__version__ = "0.1.0"
+__version__ = "0.3.0"
 
 # Configure logging based on environment
 DEFAULT_LOG_LEVEL = os.environ.get("AGENT_FRAMEWORK_LOG_LEVEL", "INFO")
@@ -53,7 +53,7 @@ def initialize(config_files=None):
     Args:
         config_files: Optional list of configuration file paths
     """
-    logger.info(f"Initializing AURA Agent Framework v{__version__}")
+    logger.info(f"Initializing ArtCafe Agent Framework v{__version__}")
     
     # Create configuration
     config = AgentConfig(config_files=config_files, defaults=DEFAULT_CONFIG)
@@ -61,6 +61,6 @@ def initialize(config_files=None):
     # Initialize messaging system
     initialize_messaging(config)
     
-    logger.info("AURA Agent Framework initialized")
+    logger.info("ArtCafe Agent Framework initialized")
     
     return config

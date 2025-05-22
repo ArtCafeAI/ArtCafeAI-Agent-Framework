@@ -7,9 +7,9 @@ import threading
 import json
 from typing import Dict, List, Any
 
-from src.agents.triage_agent import TriageAgent
-from src.agents.investigative_agent import InvestigativeAgent
-from src.utils.pubsub import subscribe, create_agent_token
+from agents.triage_agent import TriageAgent
+from agents.investigative_agent import InvestigativeAgent
+from examples.mock_pubsub import subscribe, create_agent_token
 
 # Configure logging
 logging.basicConfig(level=logging.INFO, 

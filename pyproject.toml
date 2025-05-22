@@ -1,0 +1,118 @@
+[build-system]
+requires = ["setuptools>=61.0", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "artcafe-agent-framework"
+version = "0.3.0"
+description = "A flexible, modular framework for building intelligent, collaborative AI agents"
+readme = "README.md"
+license = {file = "LICENSE"}
+authors = [
+    {name = "ArtCafe.ai", email = "support@artcafe.ai"}
+]
+maintainers = [
+    {name = "ArtCafe.ai", email = "support@artcafe.ai"}
+]
+keywords = ["ai", "agents", "llm", "framework", "messaging", "pubsub"]
+classifiers = [
+    "Development Status :: 4 - Beta",
+    "Intended Audience :: Developers",
+    "License :: OSI Approved :: MIT License",
+    "Operating System :: OS Independent",
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3.8",
+    "Programming Language :: Python :: 3.9",
+    "Programming Language :: Python :: 3.10",
+    "Programming Language :: Python :: 3.11",
+    "Programming Language :: Python :: 3.12",
+    "Topic :: Software Development :: Libraries :: Python Modules",
+    "Topic :: Scientific/Engineering :: Artificial Intelligence",
+]
+requires-python = ">=3.8"
+dependencies = [
+    "pyyaml>=6.0",
+    "aiohttp>=3.8.0",
+    "websockets>=10.4",
+    "tiktoken>=0.3.3",
+    "cryptography>=38.0.0",
+]
+
+[project.optional-dependencies]
+dev = [
+    "pytest>=7.0.0",
+    "pytest-asyncio>=0.21.0",
+    "black>=23.1.0",
+    "mypy>=1.0.0",
+    "flake8>=6.0.0",
+    "isort>=5.12.0",
+]
+llm-providers = [
+    "openai>=1.0.0",
+    "boto3>=1.26.0",
+    "anthropic>=0.20.0",
+]
+validation = [
+    "marshmallow>=3.19.0",
+    "pydantic>=2.0.0",
+]
+all = [
+    "artcafe-agent-framework[dev,llm-providers,validation]"
+]
+
+[project.urls]
+Homepage = "https://artcafe.ai"
+Documentation = "https://docs.artcafe.ai/agent-framework"
+Repository = "https://github.com/artcafeai/artcafe-agent-framework"
+"Bug Tracker" = "https://github.com/artcafeai/artcafe-agent-framework/issues"
+Changelog = "https://github.com/artcafeai/artcafe-agent-framework/blob/main/CHANGELOG.md"
+
+[project.scripts]
+artcafe-agent = "framework.core.cli:main"
+
+[tool.setuptools.packages.find]
+where = ["."]
+include = ["framework*", "agents*", "utils*"]
+exclude = ["tests*", "docs*", "examples*"]
+
+[tool.setuptools.package-data]
+"framework.core" = ["config.yaml"]
+
+[tool.black]
+line-length = 88
+target-version = ['py38']
+include = '\.pyi?$'
+extend-exclude = '''
+/(
+  # directories
+  \.eggs
+  | \.git
+  | \.hg
+  | \.mypy_cache
+  | \.tox
+  | \.venv
+  | build
+  | dist
+)/
+'''
+
+[tool.isort]
+profile = "black"
+multi_line_output = 3
+line_length = 88
+
+[tool.mypy]
+python_version = "3.8"
+warn_return_any = true
+warn_unused_configs = true
+disallow_untyped_defs = false
+disallow_incomplete_defs = false
+check_untyped_defs = true
+
+[tool.pytest.ini_options]
+minversion = "7.0"
+addopts = "-ra -q"
+testpaths = [
+    "tests",
+]
+asyncio_mode = "auto"
