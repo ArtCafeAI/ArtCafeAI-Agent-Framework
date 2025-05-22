@@ -74,3 +74,9 @@ credentials.json
 # Service tokens
 token.json
 .credentials/
+
+# Claude instructions
+CLAUDE.md
+*CLAUDE*.md
+claude.md
+*claude*.md
