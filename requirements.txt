@@ -5,6 +5,9 @@ websockets>=10.4
 tiktoken>=0.3.3
 cryptography>=38.0.0
 
+# Messaging providers (optional - install as needed)
+nats-py>=2.5.0      # For NATS provider
+
 # Optional LLM providers (install as needed)
 # openai>=1.0.0       # For OpenAI provider
 # boto3>=1.26.0       # For Bedrock provider

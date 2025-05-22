@@ -15,6 +15,13 @@ from typing import Any, Dict, List, Optional
 from .client import MCPClient
 from .agent_tool import MCPAgentTool
 
+# Conditionally import NATS bridge
+try:
+    from .nats_bridge import MCPNATSBridge
+    NATS_BRIDGE_AVAILABLE = True
+except ImportError:
+    NATS_BRIDGE_AVAILABLE = False
+
 logger = logging.getLogger("AgentFramework.MCP")
 
 __all__ = [
@@ -24,6 +31,9 @@ __all__ = [
     'get_client_for_socket',
     'get_client_for_tcp'
 ]
+
+if NATS_BRIDGE_AVAILABLE:
+    __all__.append('MCPNATSBridge')
 
 async def get_client_for_command(command: str, args: Optional[List[str]] = None) -> MCPClient:
     """

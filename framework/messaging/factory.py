@@ -14,6 +14,13 @@ try:
 except ImportError:
     AWS_IOT_AVAILABLE = False
 
+# Conditionally import NATS provider
+try:
+    from .nats_provider import NATSProvider
+    NATS_AVAILABLE = True
+except ImportError:
+    NATS_AVAILABLE = False
+
 logger = logging.getLogger("AgentFramework.Messaging.Factory")
 
 class MessagingProviderFactory:
@@ -67,6 +74,8 @@ class MessagingProviderFactory:
             provider = self._create_memory_provider()
         elif provider_name == "aws_iot":
             provider = self._create_aws_iot_provider()
+        elif provider_name == "nats":
+            provider = self._create_nats_provider()
         else:
             raise ValueError(f"Unknown messaging provider type: {provider_name}")
         
@@ -136,6 +145,28 @@ class MessagingProviderFactory:
         provider.start()
         
         logger.info(f"Created AWS IoT messaging provider for endpoint {endpoint}")
+        return provider
+    
+    def _create_nats_provider(self) -> MessagingProvider:
+        """
+        Create a NATS messaging provider.
+        
+        Returns:
+            NATSProvider: The new provider instance
+            
+        Raises:
+            ValueError: If NATS is not available
+        """
+        if not NATS_AVAILABLE:
+            raise ValueError(
+                "NATS provider is not available. Please install the required dependencies: "
+                "pip install nats-py"
+            )
+        
+        provider = NATSProvider(self._config)
+        provider.start()
+        
+        logger.info("Created NATS messaging provider")
         return provider
     
     def shutdown(self) -> None:

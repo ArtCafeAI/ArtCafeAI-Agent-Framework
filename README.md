@@ -39,13 +39,15 @@ The framework implements a clean, extensible architecture with well-defined inte
 
 ### Core Features
 - **Lightweight Agent Core**: Base agent classes with essential functionality
-- **Flexible Messaging**: Multiple messaging backends (memory, pub/sub, etc.)
+- **Flexible Messaging**: Multiple messaging backends (memory, pub/sub, NATS)
+- **NATS Integration**: Scalable pub/sub architecture with hierarchical topics
 - **LLM Integration**: Plug-and-play support for leading LLM providers
 - **Tool Framework**: Decorator-based tool creation and registry
 - **Workflow Patterns**: Pre-built patterns for chaining, routing, and parallelization
 - **Event Loop Architecture**: Structured flow for agent-LLM interactions
 - **Conversation Management**: Context window management for LLM interactions
-- **MCP Support**: Integration with Model Context Protocol servers
+- **MCP Support**: Integration with Model Context Protocol servers (including MCP over NATS)
+- **A2A Protocol**: Agent-to-Agent negotiation and coordination
 - **Telemetry & Tracing**: Built-in metrics collection and tracing
 
 ## Installation
@@ -150,11 +152,36 @@ The ArtCafe.ai Agent Framework is built on a modular architecture with these key
 └── setup_agent.py          # Setup script
 ```
 
+## NATS Integration
+
+The framework now supports NATS as a scalable messaging backbone:
+
+```python
+from framework.core import NATSAgent, AgentConfig
+
+# Create a NATS-enabled agent
+config = AgentConfig({"nats.servers": ["nats://localhost:4222"]})
+agent = NATSAgent(agent_id="my-agent", config=config)
+
+# Use MCP over NATS
+await agent.call_mcp_tool("remote-server", "search", {"query": "AI news"})
+
+# A2A negotiations
+result = await agent.negotiate_with_agents(
+    ["agent-2", "agent-3"],
+    "task_assignment",
+    {"task": "process_data", "size": "10GB"}
+)
+```
+
+See the [NATS Integration Guide](docs/nats_integration.md) for details.
+
 ## Advanced Topics
 
 For more advanced usage, check out the example scripts in the `examples/` directory. These demonstrate:
 
-- Building multi-agent systems
+- Building multi-agent systems with NATS
+- Using MCP over NATS and A2A protocols
 - Customizing LLM providers
 - Creating tool libraries
 - Implementing custom messaging backends

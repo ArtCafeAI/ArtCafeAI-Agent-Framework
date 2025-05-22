@@ -5,6 +5,13 @@ from .memory_provider import MemoryMessagingProvider
 from .factory import MessagingProviderFactory
 from .interface import MessagingInterface
 
+# Conditionally import NATS provider
+try:
+    from .nats_provider import NATSProvider
+    NATS_AVAILABLE = True
+except ImportError:
+    NATS_AVAILABLE = False
+
 __all__ = [
     'MessagingProvider',
     'MemoryMessagingProvider',
@@ -16,6 +23,9 @@ __all__ = [
     'publish',
     'unsubscribe'
 ]
+
+if NATS_AVAILABLE:
+    __all__.append('NATSProvider')
 
 # Global factory and default interface for simplified access
 _factory = None

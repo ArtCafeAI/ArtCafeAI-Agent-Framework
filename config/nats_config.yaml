@@ -1,0 +1,56 @@
+# NATS Configuration Example
+# This configuration file demonstrates how to use NATS as the messaging provider
+
+messaging:
+  provider: nats
+  
+nats:
+  # NATS server addresses
+  servers:
+    - nats://localhost:4222
+    # - nats://nats1.example.com:4222
+    # - nats://nats2.example.com:4222
+  
+  # Environment name (used in topic hierarchy)
+  environment: prod
+  
+  # Batch processing settings
+  batch_size: 10
+  batch_timeout: 1.0
+  
+# Agent configuration
+agent:
+  # Agent identification
+  id: my-nats-agent
+  type: worker
+  
+  # Capabilities this agent provides
+  capabilities:
+    - analysis
+    - code_generation
+    - tool_usage
+  
+  # Resource authorizations
+  resources:
+    - type: compute
+      actions: [read, execute]
+    - type: storage
+      actions: [read, write]
+
+# Logging configuration
+logging:
+  level: INFO
+  format: "%(asctime)s - %(name)s - %(levelname)s - %(message)s"
+
+# Example topic permissions for NATS
+# These are automatically generated based on agent capabilities
+# but can be customized here:
+permissions:
+  - "publish:agents.prod.status.*"
+  - "subscribe:agents.prod.control.{agent_id}.*"
+  - "subscribe:agents.prod.task.*"
+  - "publish:agents.prod.result.*"
+  - "subscribe:agents.prod.discovery.*"
+  - "publish:agents.prod.discovery.responses"
+  - "subscribe:agents.prod.a2a.negotiate.{agent_id}"
+  - "publish:agents.prod.a2a.negotiate.*"
