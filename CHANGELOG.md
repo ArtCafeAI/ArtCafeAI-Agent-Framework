@@ -9,7 +9,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 - **SimpleAgent**: Minimal configuration agent for quick starts
-- **AugmentedLLMAgent**: LLM-first agent following Anthropic best practices
+- **AugmentedLLMAgent**: LLM-first agent following industry best practices
 - **VerifiedAgent**: Agent with built-in verification and ground truth checks
 - **BudgetAwareAgent**: Cost tracking and budget enforcement for autonomous agents
 - **Workflow Patterns**: Pre-built implementations for chaining, routing, parallelization
@@ -21,7 +21,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Improved
 - Simplified getting started experience
-- Better alignment with Anthropic's agent building best practices
+- Better alignment with modern agent building best practices
 - Enhanced documentation with simpler examples
 - More intuitive API for common use cases
 
