@@ -1,7 +1,7 @@
 """
 Workflow patterns for agent coordination.
 
-Implements the workflow patterns recommended by Anthropic:
+Implements industry-standard workflow patterns:
 - Prompt Chaining
 - Routing
 - Parallelization

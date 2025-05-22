@@ -2,7 +2,7 @@
 Simple Agent - A minimal agent implementation for quick starts.
 
 This module provides a simplified agent that requires minimal configuration,
-following Anthropic's recommendation to "start simple".
+following best practices to "start simple".
 """
 
 import asyncio

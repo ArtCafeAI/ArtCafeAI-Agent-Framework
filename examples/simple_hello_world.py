@@ -3,7 +3,7 @@
 Simple Hello World Example
 
 Demonstrates the simplest way to create an agent with the ArtCafe framework.
-This follows Anthropic's recommendation to "start simple".
+This follows best practices to "start simple".
 """
 
 from framework import create_agent

@@ -58,7 +58,7 @@ The Agent Framework is built on these core principles:
 │                   Integration Layer                         │
 │                                                             │
 │  ┌─────────────┐  ┌─────────────┐  ┌─────────────────────┐  │
-│  │SSH Auth     │  │ArtCafe PubSub│  │ Anthropic/OpenAI   │  │
+│  │SSH Auth     │  │ArtCafe PubSub│  │ LLM Providers      │  │
 │  └─────────────┘  └─────────────┘  └─────────────────────┘  │
 └─────────────────────────────────────────────────────────────┘
 ```
