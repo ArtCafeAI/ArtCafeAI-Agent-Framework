@@ -5,7 +5,27 @@ All notable changes to the ArtCafe Agent Framework will be documented in this fi
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
-## [0.3.0] - 2025-01-XX
+## [0.4.0] - 2025-01-22
+
+### Added
+- **SimpleAgent**: Minimal configuration agent for quick starts
+- **AugmentedLLMAgent**: LLM-first agent following Anthropic best practices
+- **VerifiedAgent**: Agent with built-in verification and ground truth checks
+- **BudgetAwareAgent**: Cost tracking and budget enforcement for autonomous agents
+- **Workflow Patterns**: Pre-built implementations for chaining, routing, parallelization
+- Factory functions: `create_agent()` and `create_llm_agent()` for easy instantiation
+- Decorator-based message handlers with `@agent.on_message()`
+- Input/output verification decorators: `@verify_input()` and `@verify_output()`
+- Cost tracking with multiple budget units (tokens, requests, dollars)
+- Circuit breaker pattern for error handling
+
+### Improved
+- Simplified getting started experience
+- Better alignment with Anthropic's agent building best practices
+- Enhanced documentation with simpler examples
+- More intuitive API for common use cases
+
+## [0.3.0] - 2025-01-15
 
 ### Added
 - Initial public release of the ArtCafe Agent Framework

@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "artcafe-agent-framework"
-version = "0.3.0"
+version = "0.4.0"
 description = "A flexible, modular framework for building intelligent, collaborative AI agents"
 readme = "README.md"
 license = {file = "LICENSE"}

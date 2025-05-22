@@ -12,10 +12,18 @@ import os
 from .core.config import AgentConfig, DEFAULT_CONFIG
 from .core.base_agent import BaseAgent
 from .core.enhanced_agent import EnhancedAgent
+from .core.simple_agent import SimpleAgent, create_agent
+from .core.augmented_llm_agent import AugmentedLLMAgent, create_llm_agent
+from .core.verified_agent import VerifiedAgent, verify_input, verify_output
+from .core.budget_aware_agent import BudgetAwareAgent, Budget, CostUnit
 from .messaging import initialize as initialize_messaging
 from .messaging import get_messaging, create_token, subscribe, publish, unsubscribe
+from .workflows import (
+    ChainedWorkflow, RoutingWorkflow, ParallelWorkflow, OrchestratorWorkflow,
+    Workflow, WorkflowStep, WorkflowResult
+)
 
-__version__ = "0.3.0"
+__version__ = "0.4.0"
 
 # Configure logging based on environment
 DEFAULT_LOG_LEVEL = os.environ.get("AGENT_FRAMEWORK_LOG_LEVEL", "INFO")
@@ -34,9 +42,33 @@ logger = logging.getLogger("AgentFramework")
 
 # Export public API
 __all__ = [
+    # Core agents
     'BaseAgent',
     'EnhancedAgent',
+    'SimpleAgent',
+    'AugmentedLLMAgent',
+    'VerifiedAgent',
+    'BudgetAwareAgent',
+    # Factory functions
+    'create_agent',
+    'create_llm_agent',
+    # Decorators
+    'verify_input',
+    'verify_output',
+    # Budget management
+    'Budget',
+    'CostUnit',
+    # Workflows
+    'Workflow',
+    'WorkflowStep',
+    'WorkflowResult',
+    'ChainedWorkflow',
+    'RoutingWorkflow',
+    'ParallelWorkflow',
+    'OrchestratorWorkflow',
+    # Configuration
     'AgentConfig',
+    # Framework functions
     'initialize',
     'get_messaging',
     'create_token',

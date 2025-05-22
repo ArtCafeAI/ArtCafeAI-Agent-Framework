@@ -31,10 +31,18 @@ The framework implements a clean, extensible architecture with well-defined inte
 
 ## Key Features
 
+### 🚀 New: Simplified Agent Creation
+- **SimpleAgent**: Get started with just 3 lines of code
+- **AugmentedLLMAgent**: Start with LLM capabilities, add tools as needed
+- **VerifiedAgent**: Built-in verification and ground truth checks
+- **BudgetAwareAgent**: Cost tracking and budget enforcement
+
+### Core Features
 - **Lightweight Agent Core**: Base agent classes with essential functionality
 - **Flexible Messaging**: Multiple messaging backends (memory, pub/sub, etc.)
 - **LLM Integration**: Plug-and-play support for leading LLM providers
 - **Tool Framework**: Decorator-based tool creation and registry
+- **Workflow Patterns**: Pre-built patterns for chaining, routing, and parallelization
 - **Event Loop Architecture**: Structured flow for agent-LLM interactions
 - **Conversation Management**: Context window management for LLM interactions
 - **MCP Support**: Integration with Model Context Protocol servers
@@ -43,9 +51,12 @@ The framework implements a clean, extensible architecture with well-defined inte
 ## Installation
 
 ```bash
+# Install from PyPI (coming soon)
+pip install artcafe-agent-framework
+
 # Install from source
-git clone https://github.com/artcafeai/artcafe-agent-framework.git
-cd artcafe-agent-framework
+git clone https://github.com/artcafeai/agent-framework.git
+cd agent-framework
 pip install -e .
 
 # Or install with optional dependencies
@@ -54,58 +65,57 @@ pip install -e ".[llm-providers,dev]"
 
 ## Quick Start
 
-Here's a minimal example of creating an agent with the ArtCafe.ai Agent Framework:
+### Hello World Example
+
+The absolute simplest way to create an agent:
 
 ```python
-from artcafe.framework.core.enhanced_agent import EnhancedAgent
-from artcafe.framework.tools import tool
-from artcafe.framework.llm import get_llm_provider
+from framework import create_agent
 
-# Create a simple tool with the @tool decorator
-@tool
-def calculate_sum(a: int, b: int) -> int:
-    """
-    Calculate the sum of two numbers.
-    
-    Args:
-        a: First number
-        b: Second number
-        
-    Returns:
-        Sum of the two numbers
-    """
-    return a + b
+# Create and run an agent in 3 lines
+agent = create_agent("my-agent")
 
-# Create a simple agent
-class MathAgent(EnhancedAgent):
-    def __init__(self, agent_id=None, config=None):
-        super().__init__(agent_id=agent_id, agent_type="math", config=config)
-        self.add_capability("basic_math")
-        
-        # Initialize LLM provider
-        self.llm = get_llm_provider(self.config.get("llm", {}))
-    
-    async def process_message(self, topic, message):
-        # Handle parent processing
-        if await super().process_message(topic, message):
-            # Add custom processing logic
-            if topic == "math/calculate":
-                result = await self._process_calculation(message)
-                await self.publish("math/results", result)
-                return True
-        return False
-    
-    async def _process_calculation(self, message):
-        # Use LLM to understand the math problem
-        prompt = f"Understand this math problem: {message.get('problem')}"
-        response = await self.llm.generate(prompt=prompt)
-        
-        # Generate a response
-        return {
-            "problem": message.get("problem"),
-            "solution": response["data"]["content"],
-            "agent_id": self.agent_id
-        }
+@agent.on_message("hello")
+def say_hello(message):
+    return {"response": f"Hello, {message.get('name', 'World')}!"}
+
+agent.run()
+```
+
+### LLM-First Example
+
+Start with an LLM and add capabilities:
+
+```python
+from framework import create_llm_agent
+
+# Create an LLM agent with tools
+agent = create_llm_agent(provider="anthropic", api_key="your-key")
+
+@agent.tool
+def search_web(query: str) -> str:
+    """Search the web for information."""
+    # Your search implementation
+    return f"Search results for: {query}"
+
+# Chat with the agent
+response = await agent.chat("What's the weather in Paris?")
+print(response)
+```
+
+### Verified Agent Example
+
+Build reliable agents with verification:
+
+```python
+from framework import VerifiedAgent, verify_input, verify_output
+
+class DataAgent(VerifiedAgent):
+    @verify_input(lambda x: "data" in x)
+    @verify_output(lambda x: x is not None)
+    async def process_data(self, message):
+        # Process with automatic verification
+        return {"processed": message["data"].upper()}
 ```
 
 ## Architecture

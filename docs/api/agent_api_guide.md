@@ -1,1 +1,0 @@
-/home/stvwhite/projects/artcafe/artcafe-pubsub/docs/agent_api_guide.md
