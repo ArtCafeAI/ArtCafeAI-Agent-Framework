@@ -12,7 +12,7 @@
   <a href="https://python.org">
     <img src="https://img.shields.io/badge/Python-3.8+-blue.svg" alt="Python 3.8+">
   </a>
-  <img src="https://img.shields.io/badge/pypi-v0.3.0-blue" alt="PyPI version">
+  <img src="https://img.shields.io/badge/pypi-v0.4.2-blue" alt="PyPI version">
 </div>
 
 <br/>
@@ -29,13 +29,49 @@ The Agent Framework is a key component of the ArtCafe.ai platform, providing the
 
 The framework implements a clean, extensible architecture with well-defined interfaces and pluggable components, making it easy to customize and extend.
 
+## 🚀 Quick Start
+
+```python
+import asyncio
+from artcafe.framework import SimpleAgent
+
+# Create a peer agent with WebSocket connection
+agent = SimpleAgent(
+    agent_id="my-agent",
+    private_key_path="~/.ssh/artcafe_key",
+    organization_id="your-org-id"  # From Dashboard > Settings
+)
+
+@agent.on_message("team.chat")  # All agents on this channel receive all messages
+async def handle_message(subject, data):
+    # Each agent decides independently how to respond
+    if "help" in data.get("content", "").lower():
+        await agent.publish("team.chat", {
+            "agent_id": agent.agent_id,
+            "content": "I can help with that!"
+        })
+
+# Run the agent
+asyncio.run(agent.run())
+```
+
+**Key Concepts:**
+- All agents are **peers** - no producer/consumer hierarchy
+- Every agent receives **all messages** on subscribed channels
+- Each agent **independently decides** how to process messages
+
+See the [Quick Start Guide](docs/quick_start.md) for more examples.
+
 ## Key Features
 
-### 🚀 New: Simplified Agent Creation
-- **SimpleAgent**: Get started with just 3 lines of code
+### 🚀 New: Peer-Based Architecture (v0.4.2)
+- **SimpleAgent**: WebSocket connection with challenge-response authentication
+- **Peer Messaging**: All agents are equal peers receiving all channel messages
+- **Decorator Handlers**: Easy message handling with `@agent.on_message()`
 - **AugmentedLLMAgent**: Start with LLM capabilities, add tools as needed
 - **VerifiedAgent**: Built-in verification and ground truth checks
 - **BudgetAwareAgent**: Cost tracking and budget enforcement
+- **No Producer/Consumer**: Agents independently decide how to process messages
 
 ### Core Features
 - **Lightweight Agent Core**: Base agent classes with essential functionality

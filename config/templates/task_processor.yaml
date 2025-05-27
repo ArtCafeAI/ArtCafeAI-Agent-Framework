@@ -1,0 +1,108 @@
+# Task Processor Agent Configuration Template
+# Optimized for agents that process tasks from queues
+
+agent:
+  name: "Task Processor"
+  description: "Processes tasks from a distributed queue"
+  version: "1.0.0"
+  
+  capabilities:
+    - task_processing
+    - parallel_execution
+    - error_recovery
+    - status_reporting
+  
+  resources:
+    - "tasks:read"
+    - "tasks:write"
+    - "tasks:update"
+
+# Task processing configuration
+task_processing:
+  # Maximum concurrent tasks
+  max_concurrent_tasks: 5
+  
+  # Task timeout (seconds)
+  task_timeout: 300  # 5 minutes
+  
+  # Retry configuration
+  retry:
+    enabled: true
+    max_attempts: 3
+    backoff_multiplier: 2
+    initial_delay: 1
+  
+  # Task types to process
+  supported_types:
+    - data_processing
+    - file_conversion
+    - api_integration
+    - report_generation
+
+# Queue configuration
+queue:
+  # Subscribe to task channels
+  subscriptions:
+    - "tasks.new"
+    - "tasks.priority.*"
+    - "tasks.retry"
+  
+  # Task claim strategy
+  claim_strategy: "first_available"  # or "round_robin", "least_loaded"
+  
+  # Acknowledge settings
+  auto_acknowledge: false
+  acknowledge_timeout: 30
+
+# Performance tuning
+performance:
+  # Worker pool settings
+  worker_pool:
+    enabled: true
+    size: "${WORKER_POOL_SIZE:-4}"
+    queue_size: 100
+  
+  # Memory management
+  memory:
+    max_heap: "512m"
+    gc_interval: 300  # Run GC every 5 minutes
+  
+  # CPU throttling
+  cpu:
+    max_usage: 80  # Percentage
+    throttle_delay: 100  # milliseconds
+
+# Error handling
+error_handling:
+  # Dead letter queue
+  dead_letter:
+    enabled: true
+    topic: "tasks.failed"
+    max_retries: 3
+  
+  # Error reporting
+  report_errors: true
+  error_topic: "errors.task_processor"
+  
+  # Circuit breaker
+  circuit_breaker:
+    enabled: true
+    failure_threshold: 5
+    reset_timeout: 60
+
+# Status reporting
+status:
+  # Report interval (seconds)
+  report_interval: 30
+  
+  # Status topic
+  topic: "agents.status.${AGENT_ID}"
+  
+  # Include metrics
+  include_metrics: true
+  
+  # Health checks
+  health_check:
+    enabled: true
+    endpoint: "/health"
+    port: 8080

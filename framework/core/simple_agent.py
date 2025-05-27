@@ -1,201 +1,249 @@
 """
 Simple Agent - A minimal agent implementation for quick starts.
 
-This module provides a simplified agent that requires minimal configuration,
-following best practices to "start simple".
+This module provides an agent that uses WebSocket connection with
+challenge-response authentication, matching the working implementation.
 """
 
 import asyncio
-from typing import Optional, Dict, Any, Callable
-from .enhanced_agent import EnhancedAgent
-from ..messaging.memory_provider import MemoryMessagingProvider
+import json
+import logging
+import base64
+import time
+from typing import Optional, Dict, Any, Callable, List
+from cryptography.hazmat.primitives import hashes, serialization
+from cryptography.hazmat.primitives.asymmetric import rsa, padding
+from cryptography.hazmat.primitives.asymmetric.types import RSAPrivateKey
+from cryptography.hazmat.primitives.serialization import load_pem_private_key
+from cryptography.hazmat.primitives.hashes import SHA256
+from cryptography.hazmat.primitives.asymmetric.utils import Prehashed
+import websockets
+from urllib.parse import urlencode
+
+logger = logging.getLogger(__name__)
 
 
-class SimpleAgent(EnhancedAgent):
+class SimpleAgent:
     """
-    A simplified agent that works with minimal configuration.
+    An agent that connects via WebSocket with challenge-response authentication.
     
-    Perfect for getting started quickly without complex setup.
+    Matches the working implementation from artcafe-getting-started.
     
     Example:
         ```python
-        agent = SimpleAgent("my-agent")
+        agent = SimpleAgent(
+            agent_id="my-agent",
+            private_key_path="path/to/private_key.pem",
+            organization_id="org-123"
+        )
         
-        @agent.on_message("hello")
-        def handle_hello(message):
-            return {"response": "Hello back!"}
+        @agent.on_message("team.updates")
+        async def handle_update(subject, data):
+            print(f"Received: {data}")
             
-        agent.run()
+        await agent.run()
         ```
     """
     
     def __init__(
-        self, 
-        agent_id: str = None,
-        agent_type: str = "simple",
-        use_memory_messaging: bool = True
+        self,
+        agent_id: str,
+        private_key_path: str,
+        organization_id: str,
+        websocket_url: str = "wss://ws.artcafe.ai",
+        capabilities: List[str] = None,
+        metadata: Dict[str, Any] = None
     ):
         """
-        Initialize a simple agent with sensible defaults.
+        Initialize agent with WebSocket connection parameters.
         
         Args:
-            agent_id: Optional agent ID (auto-generated if not provided)
-            agent_type: Type of agent (default: "simple")
-            use_memory_messaging: Use in-memory messaging for easy testing
+            agent_id: Unique identifier for the agent
+            private_key_path: Path to RSA private key file
+            organization_id: Organization/tenant ID
+            websocket_url: WebSocket server URL
+            capabilities: List of agent capabilities
+            metadata: Additional agent metadata
         """
-        # Create minimal config with memory messaging by default
-        config = {
-            "agent": {
-                "type": agent_type,
-                "id": agent_id
-            }
-        }
+        self.agent_id = agent_id
+        self.organization_id = organization_id
+        self.websocket_url = websocket_url
+        self.capabilities = capabilities or []
+        self.metadata = metadata or {}
         
-        if use_memory_messaging:
-            config["messaging"] = {
-                "provider": "memory",
-                "memory": {}
-            }
-        
-        super().__init__(
-            agent_id=agent_id,
-            agent_type=agent_type,
-            config=config
-        )
+        # Load private key
+        with open(private_key_path, 'rb') as key_file:
+            self.private_key = load_pem_private_key(
+                key_file.read(),
+                password=None
+            )
         
         self._message_handlers = {}
-        self._started = False
-        
-    def on_message(self, topic: str):
+        self._subscriptions = set()
+        self._running = False
+        self._websocket = None
+        self._receive_task = None
+    
+    def on_message(self, channel: str):
         """
         Decorator for registering message handlers.
         
         Example:
             ```python
-            @agent.on_message("calculate")
-            def calculate(message):
-                return {"result": message["a"] + message["b"]}
+            @agent.on_message("team.updates")
+            async def handle_update(subject, data):
+                print(f"Received: {data}")
             ```
         """
         def decorator(func: Callable):
-            self._message_handlers[topic] = func
-            if self._started:
-                # If agent is already running, subscribe immediately
-                self.subscribe(topic)
+            self._message_handlers[channel] = func
+            self._subscriptions.add(channel)
             return func
         return decorator
     
-    async def process_message(self, topic: str, message: Dict[str, Any]) -> bool:
-        """Process incoming messages using registered handlers."""
-        # Check for exact topic match
-        if topic in self._message_handlers:
-            handler = self._message_handlers[topic]
-            
-            # Support both sync and async handlers
-            if asyncio.iscoroutinefunction(handler):
-                result = await handler(message)
-            else:
-                result = handler(message)
-            
-            # Auto-publish response if handler returns data
-            if result and isinstance(result, dict):
-                response_topic = f"{topic}/response"
-                await self.publish(response_topic, result)
-            
-            return True
+    def _sign_challenge(self, challenge: str) -> str:
+        """Sign a challenge string with the private key."""
+        message = challenge.encode('utf-8')
+        digest = hashes.Hash(hashes.SHA256())
+        digest.update(message)
+        digest_bytes = digest.finalize()
         
-        # Check for pattern matches (simple wildcard support)
-        for pattern, handler in self._message_handlers.items():
-            if self._matches_pattern(pattern, topic):
-                if asyncio.iscoroutinefunction(handler):
-                    result = await handler(message)
-                else:
-                    result = handler(message)
+        signature = self.private_key.sign(
+            digest_bytes,
+            padding.PKCS1v15(),
+            Prehashed(hashes.SHA256())
+        )
+        
+        return base64.b64encode(signature).decode('utf-8')
+    
+    async def _connect(self):
+        """Establish WebSocket connection with authentication."""
+        # Get challenge
+        import aiohttp
+        async with aiohttp.ClientSession() as session:
+            challenge_url = f"https://api.artcafe.ai/api/v1/agents/{self.agent_id}/challenge"
+            headers = {"X-Tenant-Id": self.organization_id}
+            
+            async with session.get(challenge_url, headers=headers) as resp:
+                if resp.status != 200:
+                    raise Exception(f"Failed to get challenge: {await resp.text()}")
+                challenge_data = await resp.json()
+                challenge = challenge_data['challenge']
+        
+        # Sign challenge
+        signature = self._sign_challenge(challenge)
+        
+        # Connect with auth params
+        params = {
+            'agent_id': self.agent_id,
+            'challenge': challenge,
+            'signature': signature
+        }
+        ws_url = f"{self.websocket_url}/api/v1/ws/agent/{self.agent_id}?{urlencode(params)}"
+        
+        self._websocket = await websockets.connect(ws_url)
+        logger.info(f"Agent {self.agent_id} connected to WebSocket")
+        
+        # Send presence announcement
+        await self._send_message({
+            'type': 'presence',
+            'agent_id': self.agent_id,
+            'status': 'online',
+            'capabilities': self.capabilities,
+            'metadata': self.metadata
+        })
+        
+        # Subscribe to channels
+        for channel in self._subscriptions:
+            await self._send_message({
+                'type': 'subscribe',
+                'channel': channel
+            })
+    
+    async def _send_message(self, message: Dict[str, Any]):
+        """Send a message through the WebSocket."""
+        if self._websocket:
+            await self._websocket.send(json.dumps(message))
+    
+    async def _receive_messages(self):
+        """Receive and process messages from WebSocket."""
+        try:
+            async for message in self._websocket:
+                data = json.loads(message)
                 
-                if result and isinstance(result, dict):
-                    response_topic = f"{topic}/response"
-                    await self.publish(response_topic, result)
+                # Handle different message types
+                if data.get('type') == 'message':
+                    subject = data.get('subject', '')
+                    payload = data.get('data', {})
+                    
+                    # Find matching handler
+                    for channel, handler in self._message_handlers.items():
+                        if subject.startswith(channel):
+                            try:
+                                if asyncio.iscoroutinefunction(handler):
+                                    await handler(subject, payload)
+                                else:
+                                    handler(subject, payload)
+                            except Exception as e:
+                                logger.error(f"Error in handler for {channel}: {e}")
                 
-                return True
-        
-        # Let parent handle standard agent messages
-        return await super().process_message(topic, message)
+                elif data.get('type') == 'error':
+                    logger.error(f"Received error: {data.get('message')}")
+                    
+        except websockets.ConnectionClosed:
+            logger.info(f"WebSocket connection closed for {self.agent_id}")
+        except Exception as e:
+            logger.error(f"Error receiving messages: {e}")
     
-    def _matches_pattern(self, pattern: str, topic: str) -> bool:
-        """Simple pattern matching with * wildcard."""
-        if "*" not in pattern:
-            return pattern == topic
-        
-        parts = pattern.split("*")
-        if len(parts) == 2:
-            return topic.startswith(parts[0]) and topic.endswith(parts[1])
-        return False
+    async def publish(self, channel: str, data: Dict[str, Any]):
+        """Publish a message to a channel."""
+        await self._send_message({
+            'type': 'publish',
+            'channel': channel,
+            'data': data
+        })
     
-    def _setup_subscriptions(self):
-        """Subscribe to all registered topics."""
-        for topic in self._message_handlers:
-            self.subscribe(topic)
-    
-    def run(self, duration: Optional[int] = None):
-        """
-        Run the agent (blocking).
-        
-        Args:
-            duration: Optional duration in seconds (runs forever if None)
-        """
-        self._started = True
-        self.start()
+    async def run(self):
+        """Run the agent."""
+        self._running = True
         
         try:
-            if duration:
-                import time
-                time.sleep(duration)
-            else:
-                # Run forever
-                import signal
-                
-                def signal_handler(sig, frame):
-                    print(f"\n{self.agent_id} shutting down...")
-                    self.stop()
-                    exit(0)
-                
-                signal.signal(signal.SIGINT, signal_handler)
-                signal.pause()
+            # Connect to WebSocket
+            await self._connect()
+            
+            # Start receiving messages
+            self._receive_task = asyncio.create_task(self._receive_messages())
+            
+            # Keep running
+            await self._receive_task
+            
         except KeyboardInterrupt:
-            print(f"\n{self.agent_id} shutting down...")
+            logger.info(f"Agent {self.agent_id} shutting down...")
         finally:
-            self.stop()
+            await self.stop()
     
-    async def run_async(self, duration: Optional[int] = None):
-        """
-        Run the agent asynchronously.
+    async def stop(self):
+        """Stop the agent and clean up resources."""
+        self._running = False
         
-        Args:
-            duration: Optional duration in seconds (runs forever if None)
-        """
-        self._started = True
-        await self.start_async()
+        # Send offline presence
+        if self._websocket:
+            try:
+                await self._send_message({
+                    'type': 'presence',
+                    'agent_id': self.agent_id,
+                    'status': 'offline'
+                })
+                await self._websocket.close()
+            except:
+                pass
         
-        try:
-            if duration:
-                await asyncio.sleep(duration)
-            else:
-                # Run forever
-                await asyncio.Event().wait()
-        finally:
-            await self.stop_async()
-
-
-def create_agent(agent_id: str = None, **kwargs) -> SimpleAgent:
-    """
-    Factory function to create a simple agent.
-    
-    Example:
-        ```python
-        from artcafe import create_agent
+        # Cancel receive task
+        if self._receive_task:
+            self._receive_task.cancel()
+            try:
+                await self._receive_task
+            except asyncio.CancelledError:
+                pass
         
-        agent = create_agent("my-agent")
-        agent.run()
-        ```
-    """
-    return SimpleAgent(agent_id=agent_id, **kwargs)
+        logger.info(f"Agent {self.agent_id} stopped")

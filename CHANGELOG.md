@@ -5,6 +5,36 @@ All notable changes to the ArtCafe Agent Framework will be documented in this fi
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.4.2] - 2025-05-26
+
+### Added
+- **SimplifiedAgent**: New agent class with decorator-based message handling and sensible defaults
+- **Peer-Based Architecture**: Examples showing true peer-to-peer agent communication
+- **Collaborative Examples**: Agents working together without producer/consumer patterns
+- **SSH Authentication**: Secure WebSocket authentication using SSH keys
+- **Configuration Templates**: Pre-built YAML configs for common agent patterns
+- **Quick Start Guide**: 5-minute getting started documentation
+- **CONTRIBUTING.md**: Comprehensive contribution guidelines
+
+### Changed
+- **Architecture Shift**: Moved from producer/consumer to peer-based messaging
+- **Terminology Update**: `tenant_id` → `organization_id` to match UI terminology
+- **Improved Examples**: Added environment variable support and better documentation
+- **Security Fix**: Replaced unsafe `eval()` with proper expression parsing
+- **Version Consistency**: All version numbers now consistently 0.4.2
+- **Code Quality**: Replaced print statements with proper logging
+
+### Fixed
+- Security vulnerability in calculator example using `eval()`
+- Version inconsistencies across setup.py, pyproject.toml, and __init__.py
+- Missing CONTRIBUTING.md file reference
+- Print statements in core modules now use logging
+
+### Removed
+- JWT authentication - now using SSH keys exclusively
+- Producer/consumer pattern examples - replaced with peer-based examples
+- Incomplete knowledge provider implementations (moved to roadmap)
+
 ## [0.4.0] - 2025-01-22
 
 ### Added

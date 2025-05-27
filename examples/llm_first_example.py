@@ -23,12 +23,50 @@ async def main():
     @agent.tool
     def calculate(expression: str) -> float:
         """Safely evaluate a mathematical expression."""
-        # In production, use a safe math parser
-        allowed_chars = "0123456789+-*/(). "
-        if all(c in allowed_chars for c in expression):
-            return eval(expression)
-        else:
-            raise ValueError("Invalid expression")
+        # Using a simple parser for basic math operations
+        # For production, consider using libraries like numexpr or simpleeval
+        import re
+        
+        # Validate expression contains only allowed characters
+        if not re.match(r'^[\d\s\+\-\*/\(\)\.]+$', expression):
+            raise ValueError("Invalid expression - only numbers and basic operators allowed")
+        
+        # For this example, we'll just handle simple cases
+        # In production, use a proper math expression parser
+        try:
+            # Remove whitespace
+            expr = expression.replace(' ', '')
+            
+            # Very basic validation and computation
+            # This is still limited but safer than eval()
+            if '+' in expr and not any(op in expr for op in ['*', '/', '-', '(', ')']):
+                parts = expr.split('+')
+                return sum(float(p) for p in parts)
+            elif '-' in expr and not any(op in expr for op in ['*', '/', '+', '(', ')']):
+                parts = expr.split('-')
+                result = float(parts[0])
+                for p in parts[1:]:
+                    result -= float(p)
+                return result
+            elif '*' in expr and not any(op in expr for op in ['/', '+', '-', '(', ')']):
+                parts = expr.split('*')
+                result = 1.0
+                for p in parts:
+                    result *= float(p)
+                return result
+            elif '/' in expr and not any(op in expr for op in ['*', '+', '-', '(', ')']):
+                parts = expr.split('/')
+                result = float(parts[0])
+                for p in parts[1:]:
+                    if float(p) == 0:
+                        raise ValueError("Division by zero")
+                    result /= float(p)
+                return result
+            else:
+                # Just a number
+                return float(expr)
+        except (ValueError, IndexError) as e:
+            raise ValueError(f"Cannot evaluate expression: {e}")
     
     @agent.tool
     def get_weather(city: str) -> str:

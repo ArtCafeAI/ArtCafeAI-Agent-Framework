@@ -242,10 +242,10 @@ DEFAULT_CONFIG = {
         }
     },
     "auth": {
-        "provider": "simple",
-        "jwt": {
-            "secret": None,
-            "expiration": 3600
+        "provider": "ssh",
+        "ssh_key": {
+            "private_key_path": "~/.ssh/artcafe_agent",
+            "key_type": "agent"
         }
     },
     "logging": {

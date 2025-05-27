@@ -5,13 +5,13 @@ with open("README.md", "r", encoding="utf-8") as fh:
 
 setup(
     name="artcafe-agent",
-    version="0.1.0",
+    version="0.4.2",
     author="ArtCafe Team",
     author_email="support@artcafe.ai",
     description="ArtCafe.ai Agent Framework for building intelligent agents",
     long_description=long_description,
     long_description_content_type="text/markdown",
-    url="https://github.com/artcafe-ai/agent-framework",
+    url="https://github.com/artcafeai/agent-framework",
     packages=find_packages(),
     classifiers=[
         "Development Status :: 3 - Alpha",
@@ -29,7 +29,6 @@ setup(
         "httpx>=0.24.0",
         "websockets>=11.0",
         "pydantic>=2.0.0",
-        "PyJWT>=2.6.0",
         "cryptography>=3.4.8",
         "python-dotenv>=0.19.0",
         "asyncio>=3.4.3",
@@ -46,14 +45,15 @@ setup(
             "psutil>=5.9.0",
         ]
     },
-    entry_points={
-        "console_scripts": [
-            "artcafe-agent=framework.cli:main",
-        ],
-    },
+    # CLI coming in future release
+    # entry_points={
+    #     "console_scripts": [
+    #         "artcafe-agent=framework.cli:main",
+    #     ],
+    # },
     project_urls={
-        "Bug Reports": "https://github.com/artcafe-ai/agent-framework/issues",
-        "Source": "https://github.com/artcafe-ai/agent-framework",
+        "Bug Reports": "https://github.com/artcafeai/agent-framework/issues",
+        "Source": "https://github.com/artcafeai/agent-framework",
         "Documentation": "https://docs.artcafe.ai",
     },
 )

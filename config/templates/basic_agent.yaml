@@ -1,0 +1,83 @@
+# Basic Agent Configuration Template
+# This template provides sensible defaults for most agents
+
+agent:
+  # Agent identification
+  name: "My Agent"
+  description: "A basic ArtCafe agent"
+  version: "1.0.0"
+  
+  # Capabilities - what this agent can do
+  capabilities:
+    - process_messages
+    - send_notifications
+    - data_processing
+  
+  # Resource permissions
+  resources:
+    - "channels:read"
+    - "channels:write"
+    - "agents:read"
+
+# Platform connection settings
+platform:
+  # API endpoints (defaults to production)
+  api_endpoint: "${ARTCAFE_API_ENDPOINT:-https://api.artcafe.ai}"
+  ws_endpoint: "${ARTCAFE_WS_ENDPOINT:-wss://ws.artcafe.ai}"
+  
+  # Reconnection settings
+  auto_reconnect: true
+  reconnect_delay: 5
+  max_reconnect_attempts: -1  # -1 for infinite
+
+# Messaging configuration
+messaging:
+  # Heartbeat settings
+  heartbeat_interval: 30
+  heartbeat_timeout: 60
+  
+  # Presence announcements
+  announce_online: true
+  announce_offline: true
+  
+  # Message handling
+  max_message_size: 1048576  # 1MB
+  message_timeout: 30
+
+# Logging configuration
+logging:
+  level: "${LOG_LEVEL:-INFO}"
+  format: "%(asctime)s - %(name)s - %(levelname)s - %(message)s"
+  
+  # Log to file
+  file:
+    enabled: false
+    path: "logs/agent.log"
+    max_size: 10485760  # 10MB
+    backup_count: 5
+
+# Monitoring and metrics
+monitoring:
+  # Enable metrics collection
+  enabled: true
+  
+  # Report metrics interval (seconds)
+  report_interval: 60
+  
+  # Metrics to collect
+  metrics:
+    - message_count
+    - error_count
+    - processing_time
+    - memory_usage
+
+# Development settings
+development:
+  # Enable debug mode
+  debug: "${DEBUG:-false}"
+  
+  # Pretty print JSON
+  pretty_json: true
+  
+  # Enable development endpoints
+  dev_endpoints: false

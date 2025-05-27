@@ -80,3 +80,9 @@ CLAUDE.md
 *CLAUDE*.md
 claude.md
 *claude*.md
+
+# API keys and credentials
+*api_key*
+*_token*
+secrets/
+credentials/
