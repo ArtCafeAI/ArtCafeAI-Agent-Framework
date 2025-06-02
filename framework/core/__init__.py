@@ -6,6 +6,7 @@ from .enhanced_agent import EnhancedAgent
 from .nats_agent import NATSAgent
 from .config import AgentConfig
 from .config_loader import ConfigLoader
+from .heartbeat_agent import HeartbeatAgent
 
 __all__ = [
     "BaseAgent",
@@ -13,5 +14,6 @@ __all__ = [
     "EnhancedAgent",
     "NATSAgent",
     "AgentConfig",
-    "ConfigLoader"
+    "ConfigLoader",
+    "HeartbeatAgent"
 ]
