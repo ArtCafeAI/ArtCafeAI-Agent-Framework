@@ -15,7 +15,6 @@ from datetime import datetime, timezone
 from typing import Optional, Dict, Any, Callable, List
 from cryptography.hazmat.primitives import hashes, serialization
 from cryptography.hazmat.primitives.asymmetric import rsa, padding
-from cryptography.hazmat.primitives.asymmetric.types import RSAPrivateKey
 from cryptography.hazmat.primitives.serialization import load_pem_private_key
 from cryptography.hazmat.primitives.hashes import SHA256
 from cryptography.hazmat.primitives.asymmetric.utils import Prehashed
@@ -159,7 +158,7 @@ class Agent:
             'signature': signature_b64,
             'tenant_id': self.organization_id
         }
-        ws_url = f"{self.websocket_url}/api/v1/ws/agent/{self.agent_id}?{urlencode(params)}"
+        ws_url = f"{self.websocket_url}/ws/agent/{self.agent_id}?{urlencode(params)}"
         
         self._websocket = await websockets.connect(ws_url)
         logger.info(f"Agent {self.agent_id} connected to WebSocket")
@@ -224,6 +223,11 @@ class Agent:
                 elif data.get('type') == 'error':
                     logger.error(f"Received error: {data.get('message')}")
                     
+        except websockets.ConnectionClosed:
+            logger.info(f"WebSocket connection closed for {self.agent_id}")
+        except Exception as e:
+            logger.error(f"Error receiving messages: {e}")
+                    
     def _subject_matches(self, subject: str, pattern: str) -> bool:
         """Check if a subject matches a subscription pattern."""
         # Add tenant prefix if not present in pattern
@@ -248,11 +252,6 @@ class Agent:
         else:
             # Exact match
             return subject == pattern
-                    
-        except websockets.ConnectionClosed:
-            logger.info(f"WebSocket connection closed for {self.agent_id}")
-        except Exception as e:
-            logger.error(f"Error receiving messages: {e}")
     
     async def connect(self):
         """Connect to the WebSocket server."""
@@ -344,7 +343,7 @@ class Agent:
             """Send periodic heartbeats to maintain connection."""
             while self._running:
                 try:
-                    if self._websocket and not self._websocket.closed:
+                    if self._websocket and self._websocket.state.name != 'CLOSED':
                         await self._send_message({'type': 'heartbeat'})
                         logger.debug(f"Sent heartbeat for {self.agent_id}")
                     await asyncio.sleep(heartbeat_interval)

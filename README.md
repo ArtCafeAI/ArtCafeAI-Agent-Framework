@@ -33,26 +33,26 @@ The framework implements a clean, extensible architecture with well-defined inte
 
 ```python
 import asyncio
-from artcafe.framework import Agent
+from artcafe.framework import Client
 
-# Create an agent with WebSocket connection
-agent = Agent(
-    agent_id="my-agent",
-    private_key_path="~/.ssh/artcafe_key",
-    organization_id="your-org-id"  # From Dashboard > Settings
+# Create a client with NKey authentication
+client = Client(
+    name="my-client",
+    nkey_seed="SUAIBDPBAUTWCWBKIO6XHQNINK5FWJW4OHLXC3HQ2KFE4PEJYQFN7MOVOA",  # From Dashboard
+    account_id="your-account-id"  # From Dashboard > Settings
 )
 
-@agent.on_message("team.chat")
-async def handle_message(subject, data):
-    # Process messages on this channel
-    if "help" in data.get("content", "").lower():
-        await agent.publish("team.chat", {
-            "agent_id": agent.agent_id,
+@client.on_message("events.tasks")
+async def handle_message(subject, payload, envelope):
+    # Process messages on this subject
+    if "help" in payload.get("content", "").lower():
+        await client.publish("events.responses", {
+            "client_id": client.client_id,
             "content": "I can help with that!"
         })
 
-# Run the agent (includes automatic heartbeat)
-asyncio.run(agent.run())
+# Run the client (includes automatic heartbeat)
+asyncio.run(client.run())
 ```
 
 **Key Concepts:**
@@ -65,11 +65,12 @@ See the [Quick Start Guide](docs/quick_start.md) for more examples.
 ## Key Features
 
 ### 🚀 Core Capabilities
-- **WebSocket Connection**: Direct connection with challenge-response authentication
-- **Peer Messaging**: All agents are equal peers receiving all channel messages
-- **Decorator Handlers**: Easy message handling with `@agent.on_message()`
+- **NKey Authentication**: Ed25519 keys native to NATS for secure authentication
+- **Direct NATS Connection**: No WebSocket layer, pure NATS pub/sub
+- **Peer Messaging**: All clients are equal peers receiving subscribed messages
+- **Decorator Handlers**: Easy message handling with `@client.on_message()`
 - **Automatic Heartbeat**: Built-in connection health monitoring
-- **No Producer/Consumer**: Agents independently decide how to process messages
+- **Subject-Based Permissions**: Fine-grained publish/subscribe controls
 
 ### Core Features
 - **Lightweight Agent Core**: Base agent classes with essential functionality
