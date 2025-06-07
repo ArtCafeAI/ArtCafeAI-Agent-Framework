@@ -10,6 +10,8 @@ import json
 import logging
 import base64
 import time
+import uuid
+from datetime import datetime, timezone
 from typing import Optional, Dict, Any, Callable, List
 from cryptography.hazmat.primitives import hashes, serialization
 from cryptography.hazmat.primitives.asymmetric import rsa, padding
@@ -37,9 +39,10 @@ class Agent:
             tenant_id="tenant-123"
         )
         
-        @agent.on_message("team.updates")
-        async def handle_update(subject, data):
-            print(f"Received: {data}")
+        @agent.on_message("channel.team-updates")
+        async def handle_update(subject, payload, envelope):
+            print(f"Received on {subject}: {payload}")
+            print(f"From: {envelope['source']['agent_id']}")
             
         await agent.run()
         ```
@@ -105,11 +108,18 @@ class Agent:
         """
         Decorator for registering message handlers.
         
+        The handler will receive:
+        - subject: The full NATS subject (e.g., "tenant.org-123.channel.updates")
+        - payload: The message payload from the envelope
+        - envelope: The full message envelope with metadata
+        
         Example:
             ```python
-            @agent.on_message("team.updates")
-            async def handle_update(subject, data):
-                print(f"Received: {data}")
+            @agent.on_message("channel.updates")
+            async def handle_update(subject, payload, envelope):
+                print(f"Received: {payload}")
+                print(f"Message ID: {envelope['id']}")
+                print(f"From agent: {envelope['source']['agent_id']}")
             ```
         """
         def decorator(func: Callable):
@@ -164,10 +174,19 @@ class Agent:
         })
         
         # Subscribe to channels
+        subjects = []
         for channel in self._subscriptions:
+            # Build full NATS subject if needed
+            if not channel.startswith('tenant.'):
+                subject = f"tenant.{self.organization_id}.{channel}"
+            else:
+                subject = channel
+            subjects.append(subject)
+            
+        if subjects:
             await self._send_message({
                 'type': 'subscribe',
-                'channel': channel
+                'subjects': subjects
             })
     
     async def _send_message(self, message: Dict[str, Any]):
@@ -184,21 +203,51 @@ class Agent:
                 # Handle different message types
                 if data.get('type') == 'message':
                     subject = data.get('subject', '')
-                    payload = data.get('data', {})
+                    envelope = data.get('message', {})
+                    
+                    # Extract payload from envelope
+                    payload = envelope.get('payload', {})
                     
                     # Find matching handler
-                    for channel, handler in self._message_handlers.items():
-                        if subject.startswith(channel):
+                    for pattern, handler in self._message_handlers.items():
+                        # Check if pattern matches the subject
+                        if self._subject_matches(subject, pattern):
                             try:
+                                # Pass subject, payload, and full envelope to handler
                                 if asyncio.iscoroutinefunction(handler):
-                                    await handler(subject, payload)
+                                    await handler(subject, payload, envelope)
                                 else:
-                                    handler(subject, payload)
+                                    handler(subject, payload, envelope)
                             except Exception as e:
-                                logger.error(f"Error in handler for {channel}: {e}")
+                                logger.error(f"Error in handler for {pattern}: {e}")
                 
                 elif data.get('type') == 'error':
                     logger.error(f"Received error: {data.get('message')}")
+                    
+    def _subject_matches(self, subject: str, pattern: str) -> bool:
+        """Check if a subject matches a subscription pattern."""
+        # Add tenant prefix if not present in pattern
+        if not pattern.startswith('tenant.'):
+            pattern = f"tenant.{self.organization_id}.{pattern}"
+            
+        # Simple wildcard matching
+        if pattern.endswith('.>'):
+            # Multi-level wildcard
+            prefix = pattern[:-2]
+            return subject.startswith(prefix)
+        elif '*' in pattern:
+            # Single-level wildcard
+            pattern_parts = pattern.split('.')
+            subject_parts = subject.split('.')
+            if len(pattern_parts) != len(subject_parts):
+                return False
+            for p, s in zip(pattern_parts, subject_parts):
+                if p != '*' and p != s:
+                    return False
+            return True
+        else:
+            # Exact match
+            return subject == pattern
                     
         except websockets.ConnectionClosed:
             logger.info(f"WebSocket connection closed for {self.agent_id}")
@@ -211,18 +260,63 @@ class Agent:
     
     async def subscribe(self, channel: str):
         """Subscribe to a channel."""
-        self._subscriptions.add(channel)
+        # Build full NATS subject if needed
+        if not channel.startswith('tenant.'):
+            subject = f"tenant.{self.organization_id}.{channel}"
+        else:
+            subject = channel
+            
+        self._subscriptions.add(subject)
         await self._send_message({
             'type': 'subscribe',
-            'channels': [channel]
+            'subjects': [subject]  # Use 'subjects' to be explicit about NATS
         })
     
-    async def publish(self, channel: str, data: Dict[str, Any]):
-        """Publish a message to a channel."""
+    async def publish(self, channel: str, data: Dict[str, Any], 
+                     message_type: str = "message",
+                     correlation_id: str = None,
+                     reply_to: str = None):
+        """
+        Publish a message to a channel following NATS ontology.
+        
+        Args:
+            channel: Channel name (can be simple like "channel.broadcast" or full "tenant.x.channel.broadcast")
+            data: The payload data to send
+            message_type: Type of message (message, event, command, query, response)
+            correlation_id: Optional correlation ID for tracking
+            reply_to: Optional reply subject for request-reply pattern
+        """
+        # Build full NATS subject if needed
+        if not channel.startswith('tenant.'):
+            subject = f"tenant.{self.organization_id}.{channel}"
+        else:
+            subject = channel
+            
+        # Build standard message envelope per NATS ontology
+        message = {
+            "id": str(uuid.uuid4()),
+            "timestamp": datetime.now(timezone.utc).isoformat(),
+            "version": "1.0",
+            "tenant_id": self.organization_id,
+            "source": {
+                "agent_id": self.agent_id,
+                "type": "agent"
+            },
+            "type": message_type,
+            "payload": data
+        }
+        
+        # Add optional fields
+        if correlation_id:
+            message["correlation_id"] = correlation_id
+        if reply_to:
+            message["reply_to"] = reply_to
+            
+        # Send via WebSocket
         await self._send_message({
             'type': 'publish',
-            'channel': channel,
-            'data': data
+            'subject': subject,  # Use 'subject' for NATS alignment
+            'message': message   # Full envelope
         })
     
     async def start(self):
