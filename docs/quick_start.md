@@ -16,13 +16,13 @@ pip install artcafe-agent-framework
 
 ## Your First Agent
 
-### 1. Create a Simple Agent
+### 1. Create an Agent
 
 ```python
-from artcafe.framework import SimplifiedAgent
+from artcafe.framework import Agent
 
-# Create your agent with decorator-based message handling
-agent = SimplifiedAgent(
+# Create your agent
+agent = Agent(
     agent_id="my-first-agent",
     organization_id="your-org-id",  # Find this in Dashboard > Settings
     private_key_path="~/.ssh/artcafe_agent_key"
@@ -35,15 +35,10 @@ async def handle_hello(subject, data):
     # Send a response
     await agent.publish("hello.response", {"message": "Hello back!"})
 
-# Handle all unmatched messages
-@agent.default_handler
-async def handle_other(subject, data):
-    print(f"Received message on {subject}: {data}")
-
-# Run the agent
+# Run the agent (includes automatic heartbeat)
 if __name__ == "__main__":
     import asyncio
-    asyncio.run(agent.run_forever())
+    asyncio.run(agent.run())
 ```
 
 ### 2. Using Configuration Files

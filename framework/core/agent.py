@@ -1,8 +1,8 @@
 """
-Simple Agent - A minimal agent implementation for quick starts.
+ArtCafe Agent - Production-ready agent implementation.
 
 This module provides an agent that uses WebSocket connection with
-challenge-response authentication, matching the working implementation.
+challenge-response authentication for secure communication.
 """
 
 import asyncio
@@ -23,7 +23,7 @@ from urllib.parse import urlencode
 logger = logging.getLogger(__name__)
 
 
-class SimpleAgent:
+class Agent:
     """
     An agent that connects via WebSocket with challenge-response authentication.
     
@@ -31,10 +31,10 @@ class SimpleAgent:
     
     Example:
         ```python
-        agent = SimpleAgent(
+        agent = Agent(
             agent_id="my-agent",
             private_key_path="path/to/private_key.pem",
-            organization_id="org-123"
+            tenant_id="tenant-123"
         )
         
         @agent.on_message("team.updates")
@@ -49,8 +49,12 @@ class SimpleAgent:
         self,
         agent_id: str,
         private_key_path: str,
-        organization_id: str,
-        websocket_url: str = "wss://ws.artcafe.ai",
+        tenant_id: str = None,
+        organization_id: str = None,
+        api_endpoint: str = None,
+        ws_endpoint: str = None,
+        websocket_url: str = None,
+        log_level: str = "INFO",
         capabilities: List[str] = None,
         metadata: Dict[str, Any] = None
     ):
@@ -60,14 +64,27 @@ class SimpleAgent:
         Args:
             agent_id: Unique identifier for the agent
             private_key_path: Path to RSA private key file
-            organization_id: Organization/tenant ID
-            websocket_url: WebSocket server URL
+            tenant_id: Tenant ID (preferred)
+            organization_id: Organization ID (legacy, same as tenant_id)
+            api_endpoint: API endpoint (unused, for compatibility)
+            ws_endpoint: WebSocket endpoint URL
+            websocket_url: WebSocket URL (legacy)
+            log_level: Logging level
             capabilities: List of agent capabilities
             metadata: Additional agent metadata
         """
         self.agent_id = agent_id
-        self.organization_id = organization_id
-        self.websocket_url = websocket_url
+        # Handle both tenant_id and organization_id for compatibility
+        self.organization_id = tenant_id or organization_id
+        if not self.organization_id:
+            raise ValueError("Either tenant_id or organization_id must be provided")
+        
+        # Handle both ws_endpoint and websocket_url for compatibility
+        self.websocket_url = ws_endpoint or websocket_url or "wss://ws.artcafe.ai"
+        
+        # Set log level
+        if log_level:
+            logger.setLevel(getattr(logging, log_level.upper()))
         self.capabilities = capabilities or []
         self.metadata = metadata or {}
         
@@ -101,7 +118,7 @@ class SimpleAgent:
             return func
         return decorator
     
-    def _sign_challenge(self, challenge: str) -> str:
+    def _sign_challenge(self, challenge: str) -> bytes:
         """Sign a challenge string with the private key."""
         message = challenge.encode('utf-8')
         digest = hashes.Hash(hashes.SHA256())
@@ -114,30 +131,23 @@ class SimpleAgent:
             Prehashed(hashes.SHA256())
         )
         
-        return base64.b64encode(signature).decode('utf-8')
+        return signature
     
     async def _connect(self):
         """Establish WebSocket connection with authentication."""
-        # Get challenge
-        import aiohttp
-        async with aiohttp.ClientSession() as session:
-            challenge_url = f"https://api.artcafe.ai/api/v1/agents/{self.agent_id}/challenge"
-            headers = {"X-Tenant-Id": self.organization_id}
-            
-            async with session.get(challenge_url, headers=headers) as resp:
-                if resp.status != 200:
-                    raise Exception(f"Failed to get challenge: {await resp.text()}")
-                challenge_data = await resp.json()
-                challenge = challenge_data['challenge']
+        # Generate a fresh challenge locally
+        import uuid
+        challenge = str(uuid.uuid4())
         
-        # Sign challenge
+        # Sign the challenge
         signature = self._sign_challenge(challenge)
+        signature_b64 = base64.b64encode(signature).decode('utf-8')
         
-        # Connect with auth params
+        # Connect with auth params in URL
         params = {
-            'agent_id': self.agent_id,
             'challenge': challenge,
-            'signature': signature
+            'signature': signature_b64,
+            'tenant_id': self.organization_id
         }
         ws_url = f"{self.websocket_url}/api/v1/ws/agent/{self.agent_id}?{urlencode(params)}"
         
@@ -195,6 +205,18 @@ class SimpleAgent:
         except Exception as e:
             logger.error(f"Error receiving messages: {e}")
     
+    async def connect(self):
+        """Connect to the WebSocket server."""
+        await self._connect()
+    
+    async def subscribe(self, channel: str):
+        """Subscribe to a channel."""
+        self._subscriptions.add(channel)
+        await self._send_message({
+            'type': 'subscribe',
+            'channels': [channel]
+        })
+    
     async def publish(self, channel: str, data: Dict[str, Any]):
         """Publish a message to a channel."""
         await self._send_message({
@@ -203,9 +225,37 @@ class SimpleAgent:
             'data': data
         })
     
-    async def run(self):
-        """Run the agent."""
+    async def start(self):
+        """Start processing messages (without connecting)."""
+        if not self._websocket:
+            raise RuntimeError("Not connected. Call connect() first.")
+        
         self._running = True
+        await self._receive_messages()
+    
+    def register_command(self, command: str, handler: Callable):
+        """Register a command handler."""
+        self._message_handlers[command] = handler
+    
+    async def run(self, heartbeat_interval: int = 30):
+        """
+        Run the agent with automatic heartbeat.
+        
+        Args:
+            heartbeat_interval: Seconds between heartbeats (default: 30)
+        """
+        self._running = True
+        
+        async def heartbeat_loop():
+            """Send periodic heartbeats to maintain connection."""
+            while self._running:
+                try:
+                    if self._websocket and not self._websocket.closed:
+                        await self._send_message({'type': 'heartbeat'})
+                        logger.debug(f"Sent heartbeat for {self.agent_id}")
+                    await asyncio.sleep(heartbeat_interval)
+                except Exception as e:
+                    logger.error(f"Error sending heartbeat: {e}")
         
         try:
             # Connect to WebSocket
@@ -214,8 +264,18 @@ class SimpleAgent:
             # Start receiving messages
             self._receive_task = asyncio.create_task(self._receive_messages())
             
-            # Keep running
-            await self._receive_task
+            # Start heartbeat
+            heartbeat_task = asyncio.create_task(heartbeat_loop())
+            
+            # Wait for either task to complete
+            done, pending = await asyncio.wait(
+                [self._receive_task, heartbeat_task],
+                return_when=asyncio.FIRST_COMPLETED
+            )
+            
+            # Cancel remaining tasks
+            for task in pending:
+                task.cancel()
             
         except KeyboardInterrupt:
             logger.info(f"Agent {self.agent_id} shutting down...")

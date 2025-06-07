@@ -33,25 +33,25 @@ The framework implements a clean, extensible architecture with well-defined inte
 
 ```python
 import asyncio
-from artcafe.framework import SimpleAgent
+from artcafe.framework import Agent
 
-# Create a peer agent with WebSocket connection
-agent = SimpleAgent(
+# Create an agent with WebSocket connection
+agent = Agent(
     agent_id="my-agent",
     private_key_path="~/.ssh/artcafe_key",
     organization_id="your-org-id"  # From Dashboard > Settings
 )
 
-@agent.on_message("team.chat")  # All agents on this channel receive all messages
+@agent.on_message("team.chat")
 async def handle_message(subject, data):
-    # Each agent decides independently how to respond
+    # Process messages on this channel
     if "help" in data.get("content", "").lower():
         await agent.publish("team.chat", {
             "agent_id": agent.agent_id,
             "content": "I can help with that!"
         })
 
-# Run the agent
+# Run the agent (includes automatic heartbeat)
 asyncio.run(agent.run())
 ```
 
@@ -64,13 +64,11 @@ See the [Quick Start Guide](docs/quick_start.md) for more examples.
 
 ## Key Features
 
-### 🚀 New: Peer-Based Architecture (v0.4.2)
-- **SimpleAgent**: WebSocket connection with challenge-response authentication
+### 🚀 Core Capabilities
+- **WebSocket Connection**: Direct connection with challenge-response authentication
 - **Peer Messaging**: All agents are equal peers receiving all channel messages
 - **Decorator Handlers**: Easy message handling with `@agent.on_message()`
-- **AugmentedLLMAgent**: Start with LLM capabilities, add tools as needed
-- **VerifiedAgent**: Built-in verification and ground truth checks
-- **BudgetAwareAgent**: Cost tracking and budget enforcement
+- **Automatic Heartbeat**: Built-in connection health monitoring
 - **No Producer/Consumer**: Agents independently decide how to process messages
 
 ### Core Features
