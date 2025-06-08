@@ -1,7 +1,7 @@
 # ArtCafe.ai Agent Framework
 
 <div align="center">
-  <img src="https://artcafe.ai/img/logo/artcafe-logo.png" alt="ArtCafe.ai Logo" width="200"/>
+  <img src="docs/images/artcafe-logo.png" alt="ArtCafe.ai Logo" width="200"/>
   <h3>A flexible, modular framework for building intelligent, collaborative AI agents</h3>
 </div>
 
