@@ -1,305 +1,312 @@
 #!/usr/bin/env python3
+"""
+NATS Agent with NKey Authentication
+
+This agent provides direct NATS connection using NKey authentication,
+bypassing the WebSocket layer for better performance.
+"""
 
 import asyncio
 import json
 import logging
-import uuid
-from typing import Dict, List, Any, Optional, Callable
+import os
+import tempfile
+from typing import Any, Callable, Dict, Optional, Union
 from datetime import datetime
 
-from .enhanced_agent import EnhancedAgent
-from ..messaging.nats_provider import NATSProvider
-from ..mcp.nats_bridge import MCPNATSBridge
-from ..protocols.a2a import A2AProtocol
+import nats
+from nats.errors import ConnectionClosedError, TimeoutError, NoRespondersError
+
+from .base_agent import BaseAgent
 from ..core.config import AgentConfig
 
 logger = logging.getLogger("AgentFramework.Core.NATSAgent")
 
-class NATSAgent(EnhancedAgent):
+
+class NATSAgent(BaseAgent):
     """
-    Agent implementation that uses NATS as the messaging backbone.
+    Agent with direct NATS connection using NKey authentication.
     
-    This agent extends EnhancedAgent to provide native NATS support with:
-    - Hierarchical topic structure as defined in the guide
-    - MCP over NATS support
-    - A2A protocol support
-    - Message batching and streaming capabilities
+    This agent connects directly to NATS without going through WebSocket,
+    providing lower latency and better performance.
     """
     
     def __init__(
         self,
-        agent_id: Optional[str] = None,
-        agent_type: str = "nats",
+        client_id: str,
+        tenant_id: str,
+        nkey_seed: Union[str, bytes],
+        nats_url: str = "nats://nats.artcafe.ai:4222",
+        name: Optional[str] = None,
+        metadata: Optional[Dict[str, Any]] = None,
         config: Optional[AgentConfig] = None
     ):
         """
-        Initialize a NATS-enabled agent.
+        Initialize a NATS agent with NKey authentication.
         
         Args:
-            agent_id: Unique identifier for this agent
-            agent_type: Type of agent
-            config: Configuration object
+            client_id: Client ID from the ArtCafe dashboard
+            tenant_id: Tenant/organization ID
+            nkey_seed: NKey seed string or path to seed file
+            nats_url: NATS server URL
+            name: Optional name for the agent
+            metadata: Optional metadata dictionary
+            config: Optional configuration object
         """
-        # Force NATS provider in config
-        if config is None:
-            config = AgentConfig()
-        config.set("messaging.provider", "nats")
+        # Initialize base agent
+        super().__init__(
+            agent_id=client_id,
+            agent_type="nats",
+            config=config or AgentConfig()
+        )
         
-        super().__init__(agent_id, agent_type, config)
+        self.client_id = client_id
+        self.tenant_id = tenant_id
+        self.nkey_seed = nkey_seed
+        self.nats_url = nats_url
+        self.name = name or client_id
+        self.metadata = metadata or {}
         
-        self.mcp_bridge = None
-        self.a2a_protocol = None
-        self.batch_queue = []
-        self.batch_size = config.get("nats.batch_size", 10)
-        self.batch_timeout = config.get("nats.batch_timeout", 1.0)
-        self._batch_timer = None
+        # NATS connection
+        self.nc: Optional[nats.NATS] = None
+        self._subscriptions = {}
+        self._message_handlers = {}
+        self._is_connected = False
+        self._heartbeat_task = None
         
-    def _setup_messaging(self):
-        """Set up NATS-specific messaging features."""
-        super()._setup_messaging()
-        
-        # Get NATS provider
-        if isinstance(self.messaging._provider, NATSProvider):
-            # Set up MCP bridge
-            self.mcp_bridge = MCPNATSBridge(self.messaging._provider, self.agent_id)
-            self.mcp_bridge.authenticate(self._get_permissions())
-            
-            # Set up A2A protocol
-            self.a2a_protocol = A2AProtocol(
-                self.messaging._provider,
-                self.agent_id,
-                self.capabilities
-            )
-            self.a2a_protocol.authenticate(self._get_permissions())
-            
-            logger.info(f"NATS agent {self.agent_id} initialized with MCP and A2A support")
-            
-    def register_mcp_server(self, server_id: str, mcp_client):
-        """
-        Register an MCP server to be accessible over NATS.
-        
-        Args:
-            server_id: Unique identifier for the MCP server
-            mcp_client: The MCP client instance
-        """
-        if self.mcp_bridge:
-            self.mcp_bridge.register_mcp_server(server_id, mcp_client)
-        else:
-            logger.warning("MCP bridge not available - using non-NATS provider")
-            
-    def register_a2a_handler(
-        self,
-        negotiation_type: str,
-        handler: Callable[[Dict[str, Any]], Dict[str, Any]]
-    ):
-        """
-        Register a handler for A2A negotiations.
-        
-        Args:
-            negotiation_type: Type of negotiation to handle
-            handler: Function to handle the negotiation
-        """
-        if self.a2a_protocol:
-            self.a2a_protocol.register_negotiation_handler(negotiation_type, handler)
-        else:
-            logger.warning("A2A protocol not available - using non-NATS provider")
-            
-    async def negotiate_with_agents(
-        self,
-        target_agents: List[str],
-        negotiation_type: str,
-        proposal: Dict[str, Any],
-        constraints: Optional[Dict[str, Any]] = None,
-        timeout: float = 30.0
-    ) -> Dict[str, Any]:
-        """
-        Initiate an A2A negotiation with other agents.
-        
-        Args:
-            target_agents: List of agent IDs to negotiate with
-            negotiation_type: Type of negotiation
-            proposal: The proposal content
-            constraints: Optional constraints for the negotiation
-            timeout: Timeout in seconds
-            
-        Returns:
-            Dict containing negotiation results
-        """
-        if self.a2a_protocol:
-            return await self.a2a_protocol.initiate_negotiation(
-                target_agents,
-                negotiation_type,
-                proposal,
-                constraints,
-                timeout
-            )
-        else:
-            raise RuntimeError("A2A protocol not available - using non-NATS provider")
-            
-    async def call_mcp_tool(
-        self,
-        server_id: str,
-        tool_name: str,
-        arguments: Dict[str, Any],
-        timeout: float = 30.0
-    ) -> Dict[str, Any]:
-        """
-        Call an MCP tool on a remote server through NATS.
-        
-        Args:
-            server_id: ID of the MCP server
-            tool_name: Name of the tool to call
-            arguments: Arguments for the tool
-            timeout: Timeout in seconds
-            
-        Returns:
-            Dict containing the tool result
-        """
-        if self.mcp_bridge:
-            return await self.mcp_bridge.call_mcp_tool(
-                server_id,
-                tool_name,
-                arguments,
-                timeout
-            )
-        else:
-            raise RuntimeError("MCP bridge not available - using non-NATS provider")
-            
-    def enable_batch_processing(self, batch_size: int = 10, batch_timeout: float = 1.0):
-        """
-        Enable batch processing of messages.
-        
-        Args:
-            batch_size: Maximum number of messages to batch
-            batch_timeout: Maximum time to wait before processing a partial batch
-        """
-        self.batch_size = batch_size
-        self.batch_timeout = batch_timeout
-        logger.info(f"Batch processing enabled: size={batch_size}, timeout={batch_timeout}s")
-        
-    def process_message(self, topic: str, message: Dict[str, Any]) -> bool:
-        """
-        Process a message, potentially batching it.
-        
-        Args:
-            topic: The topic the message was received on
-            message: The message payload
-            
-        Returns:
-            bool: True if message was processed/queued successfully
-        """
-        if self.batch_size > 1:
-            # Add to batch queue
-            self.batch_queue.append((topic, message))
-            
-            if len(self.batch_queue) >= self.batch_size:
-                # Process full batch
-                self._process_batch()
+        logger.info(f"NATS Agent initialized: {client_id}")
+    
+    async def connect(self):
+        """Connect to NATS using NKey authentication."""
+        try:
+            # Handle NKey seed
+            if isinstance(self.nkey_seed, str) and os.path.exists(self.nkey_seed):
+                # It's a file path
+                creds_file = self.nkey_seed
             else:
-                # Start/reset batch timer
-                if self._batch_timer:
-                    self._batch_timer.cancel()
-                self._batch_timer = asyncio.create_task(self._batch_timeout_handler())
+                # It's the seed string - write to temp file
+                with tempfile.NamedTemporaryFile(mode='w', delete=False, suffix='.nkey') as f:
+                    if isinstance(self.nkey_seed, bytes):
+                        f.write(self.nkey_seed.decode())
+                    else:
+                        f.write(self.nkey_seed)
+                    creds_file = f.name
+            
+            # Connect to NATS
+            self.nc = await nats.connect(
+                self.nats_url,
+                credentials=creds_file,
+                name=f"{self.name} ({self.client_id})",
+                error_cb=self._error_callback,
+                disconnected_cb=self._disconnected_callback,
+                reconnected_cb=self._reconnected_callback,
+                closed_cb=self._closed_callback,
+            )
+            
+            self._is_connected = True
+            logger.info(f"Connected to NATS as {self.client_id}")
+            
+            # Start heartbeat
+            self._heartbeat_task = asyncio.create_task(self._heartbeat_loop())
+            
+            # Clean up temp file if created
+            if creds_file != self.nkey_seed and os.path.exists(creds_file):
+                os.unlink(creds_file)
                 
-            return True
-        else:
-            # Process immediately
-            return super().process_message(topic, message)
+        except Exception as e:
+            logger.error(f"Failed to connect: {e}")
+            raise
+    
+    async def disconnect(self):
+        """Disconnect from NATS."""
+        if self._heartbeat_task:
+            self._heartbeat_task.cancel()
             
-    def _process_batch(self):
-        """Process all messages in the batch queue."""
-        if not self.batch_queue:
-            return
+        if self.nc:
+            await self.nc.close()
             
-        batch = self.batch_queue.copy()
-        self.batch_queue.clear()
-        
-        # Cancel timer if running
-        if self._batch_timer:
-            self._batch_timer.cancel()
-            self._batch_timer = None
-            
-        # Process all messages
-        self.logger.info(f"Processing batch of {len(batch)} messages")
-        
-        for topic, message in batch:
-            try:
-                super().process_message(topic, message)
-            except Exception as e:
-                self.logger.error(f"Error processing batched message: {e}")
-                
-    async def _batch_timeout_handler(self):
-        """Handle batch timeout."""
-        await asyncio.sleep(self.batch_timeout)
-        self._process_batch()
-        
-    async def stream_response(
-        self,
-        task_id: str,
-        response_generator,
-        chunk_size: int = 1024
-    ):
+        self._is_connected = False
+        logger.info("Disconnected from NATS")
+    
+    async def subscribe(self, subject: str, handler: Optional[Callable] = None):
         """
-        Stream a response over NATS.
+        Subscribe to a subject pattern.
         
         Args:
-            task_id: ID of the task this is responding to
-            response_generator: Async generator yielding response chunks
-            chunk_size: Maximum size of each chunk
+            subject: Subject pattern (e.g., "tasks.*", "alerts.>")
+            handler: Optional message handler function
         """
-        sequence = 0
+        # Add tenant prefix
+        full_subject = f"{self.tenant_id}.{subject}"
         
-        async for chunk in response_generator:
-            stream_msg = {
-                "id": str(uuid.uuid4()),
-                "timestamp": datetime.now().timestamp(),
-                "version": "1.0",
-                "type": "stream",
-                "source": {
-                    "id": self.agent_id,
-                    "type": "agent"
-                },
-                "correlationId": task_id,
-                "context": {
-                    "conversationId": task_id
-                },
-                "payload": {
-                    "sequenceNumber": sequence,
-                    "isFirst": sequence == 0,
-                    "isFinal": False,
-                    "chunk": chunk[:chunk_size] if isinstance(chunk, str) else chunk
-                },
-                "routing": {
-                    "priority": 5
-                }
-            }
+        # Create subscription
+        sub = await self.nc.subscribe(full_subject)
+        self._subscriptions[subject] = sub
+        
+        if handler:
+            self._message_handlers[subject] = handler
             
-            # Publish stream chunk
-            stream_topic = f"agents/stream/response/{task_id}"
-            self.publish(stream_topic, stream_msg)
-            sequence += 1
+        logger.info(f"Subscribed to {full_subject}")
+        
+        # Start message processor if handler provided
+        if handler:
+            asyncio.create_task(self._process_messages(sub, subject, handler))
+    
+    async def unsubscribe(self, subject: str):
+        """Unsubscribe from a subject."""
+        if subject in self._subscriptions:
+            await self._subscriptions[subject].unsubscribe()
+            del self._subscriptions[subject]
+            if subject in self._message_handlers:
+                del self._message_handlers[subject]
+            logger.info(f"Unsubscribed from {subject}")
+    
+    async def publish(self, subject: str, data: Any, reply: Optional[str] = None):
+        """
+        Publish a message to a subject.
+        
+        Args:
+            subject: Target subject
+            data: Message data (will be JSON encoded if not bytes)
+            reply: Optional reply-to subject
+        """
+        # Add tenant prefix
+        full_subject = f"{self.tenant_id}.{subject}"
+        
+        # Encode data
+        if isinstance(data, bytes):
+            payload = data
+        else:
+            payload = json.dumps(data).encode()
+        
+        # Publish
+        await self.nc.publish(full_subject, payload, reply=reply)
+        logger.debug(f"Published to {full_subject}")
+    
+    async def request(self, subject: str, data: Any, timeout: float = 5.0) -> Any:
+        """
+        Send a request and wait for a response.
+        
+        Args:
+            subject: Target subject
+            data: Request data
+            timeout: Response timeout in seconds
             
-        # Send final message
-        final_msg = stream_msg.copy()
-        final_msg["id"] = str(uuid.uuid4())
-        final_msg["payload"]["sequenceNumber"] = sequence
-        final_msg["payload"]["isFinal"] = True
-        final_msg["payload"]["chunk"] = ""
+        Returns:
+            Response data (JSON decoded if possible)
+        """
+        # Add tenant prefix
+        full_subject = f"{self.tenant_id}.{subject}"
         
-        self.publish(stream_topic, final_msg)
+        # Encode data
+        if isinstance(data, bytes):
+            payload = data
+        else:
+            payload = json.dumps(data).encode()
         
-    def _get_permissions(self) -> List[str]:
-        """Get permissions for NATS authentication."""
-        permissions = super()._get_permissions()
+        try:
+            # Send request
+            response = await self.nc.request(full_subject, payload, timeout=timeout)
+            
+            # Decode response
+            try:
+                return json.loads(response.data.decode())
+            except:
+                return response.data
+                
+        except TimeoutError:
+            logger.error(f"Request timeout for {subject}")
+            raise
+        except NoRespondersError:
+            logger.error(f"No responders for {subject}")
+            raise
+    
+    def on_message(self, subject: str):
+        """
+        Decorator for message handlers.
         
-        # Add NATS-specific permissions
-        permissions.extend([
-            f"publish:agents.*.mcp.{self.agent_id}.*",
-            f"subscribe:agents.*.mcp.{self.agent_id}.*",
-            f"publish:agents.*.a2a.negotiate.*",
-            f"subscribe:agents.*.a2a.negotiate.{self.agent_id}",
-            f"publish:agents.*.stream.response.*",
-            f"subscribe:agents.*.stream.response.*"
-        ])
-        
-        return permissions
+        Example:
+            @agent.on_message("tasks.new")
+            async def handle_new_task(subject, data):
+                # Process task
+                await agent.publish("tasks.result", result)
+        """
+        def decorator(func):
+            asyncio.create_task(self.subscribe(subject, func))
+            return func
+        return decorator
+    
+    async def start(self):
+        """Start the agent and maintain connection."""
+        if not self._is_connected:
+            await self.connect()
+            
+        try:
+            await super().start()  # Call parent start method
+        finally:
+            await self.disconnect()
+    
+    async def stop(self):
+        """Stop the agent."""
+        logger.info("Stopping NATS agent")
+        self._is_connected = False
+        await super().stop()  # Call parent stop method
+        await self.disconnect()
+        logger.info("NATS agent stopped")
+    
+    # Private methods
+    
+    async def _process_messages(self, subscription, subject: str, handler: Callable):
+        """Process messages for a subscription."""
+        async for msg in subscription.messages:
+            try:
+                # Decode message
+                try:
+                    data = json.loads(msg.data.decode())
+                except:
+                    data = msg.data
+                
+                # Remove tenant prefix from subject for handler
+                clean_subject = msg.subject.replace(f"{self.tenant_id}.", "", 1)
+                
+                # Call handler
+                if asyncio.iscoroutinefunction(handler):
+                    await handler(clean_subject, data)
+                else:
+                    handler(clean_subject, data)
+                    
+            except Exception as e:
+                logger.error(f"Error processing message on {subject}: {e}")
+    
+    async def _heartbeat_loop(self):
+        """Send periodic heartbeats."""
+        while self._is_connected:
+            try:
+                await self.publish("heartbeat", {
+                    "client_id": self.client_id,
+                    "timestamp": datetime.utcnow().isoformat(),
+                    "metadata": self.metadata
+                })
+                await asyncio.sleep(30)  # 30 second heartbeat
+            except Exception as e:
+                logger.error(f"Heartbeat error: {e}")
+                await asyncio.sleep(5)
+    
+    def _error_callback(self, e):
+        """Handle NATS errors."""
+        logger.error(f"NATS error: {e}")
+    
+    def _disconnected_callback(self):
+        """Handle disconnection."""
+        logger.warning("Disconnected from NATS")
+        self._is_connected = False
+    
+    def _reconnected_callback(self):
+        """Handle reconnection."""
+        logger.info("Reconnected to NATS")
+        self._is_connected = True
+    
+    def _closed_callback(self):
+        """Handle connection closed."""
+        logger.info("NATS connection closed")
+        self._is_connected = False
