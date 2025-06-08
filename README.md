@@ -21,107 +21,45 @@
 
 The Agent Framework is a key component of the ArtCafe.ai platform, providing the foundation for building intelligent agents that can:
 
-- Communicate through a pub/sub messaging system
-- Discover and collaborate with other agents
-- Process complex data and make decisions
-- Self-report status and health metrics
+- Connect directly to NATS with NKey authentication for high-performance messaging
+- Communicate through pub/sub patterns with automatic tenant isolation
+- Collaborate with other agents as peers
+- Process complex data and make decisions using integrated LLM providers
+- Self-report status and health metrics via built-in heartbeat
 - Manage their own lifecycle (start, stop, pause, etc.)
-
-The framework implements a clean, extensible architecture with well-defined interfaces and pluggable components, making it easy to customize and extend.
 
 ## 🚀 Quick Start
 
+### Direct NATS Connection (Recommended)
+
 ```python
 import asyncio
-from artcafe.framework import Client
+from framework.core.nats_agent import NATSAgent
 
-# Create a client with NKey authentication
-client = Client(
-    name="my-client",
-    nkey_seed="SUAIBDPBAUTWCWBKIO6XHQNINK5FWJW4OHLXC3HQ2KFE4PEJYQFN7MOVOA",  # From Dashboard
-    account_id="your-account-id"  # From Dashboard > Settings
-)
+async def main():
+    # Create agent with NKey authentication
+    agent = NATSAgent(
+        client_id="my-client",
+        tenant_id="your-tenant-id",
+        nkey_seed="SUAIBDPBAUTWCWBKIO6XHQNINK5FWJW4OHLXC3HQ2KFE4PEJYQFN7MOVOA"
+    )
+    
+    # Connect directly to NATS
+    await agent.connect()
+    
+    # Handle messages with decorator
+    @agent.on_message("tasks.*")
+    async def handle_task(subject, data):
+        print(f"Received task: {data}")
+        await agent.publish("tasks.complete", {"status": "done"})
+    
+    # Keep running
+    await agent.start()
 
-@client.on_message("events.tasks")
-async def handle_message(subject, payload, envelope):
-    # Process messages on this subject
-    if "help" in payload.get("content", "").lower():
-        await client.publish("events.responses", {
-            "client_id": client.client_id,
-            "content": "I can help with that!"
-        })
-
-# Run the client (includes automatic heartbeat)
-asyncio.run(client.run())
+asyncio.run(main())
 ```
 
-**Key Concepts:**
-- All agents are **peers** - no producer/consumer hierarchy
-- Every agent receives **all messages** on subscribed channels
-- Each agent **independently decides** how to process messages
-
-See the [Quick Start Guide](docs/quick_start.md) for more examples.
-
-## Key Features
-
-### 🚀 Core Capabilities
-- **NKey Authentication**: Ed25519 keys native to NATS for secure authentication
-- **Direct NATS Connection**: No WebSocket layer, pure NATS pub/sub
-- **Peer Messaging**: All clients are equal peers receiving subscribed messages
-- **Decorator Handlers**: Easy message handling with `@client.on_message()`
-- **Automatic Heartbeat**: Built-in connection health monitoring
-- **Subject-Based Permissions**: Fine-grained publish/subscribe controls
-
-### Core Features
-- **Lightweight Agent Core**: Base agent classes with essential functionality
-- **Flexible Messaging**: Multiple messaging backends (memory, pub/sub, NATS)
-- **NATS Integration**: Scalable pub/sub architecture with hierarchical topics
-- **LLM Integration**: Plug-and-play support for leading LLM providers
-- **Tool Framework**: Decorator-based tool creation and registry
-- **Workflow Patterns**: Pre-built patterns for chaining, routing, and parallelization
-- **Event Loop Architecture**: Structured flow for agent-LLM interactions
-- **Conversation Management**: Context window management for LLM interactions
-- **MCP Support**: Integration with Model Context Protocol servers (including MCP over NATS)
-- **A2A Protocol**: Agent-to-Agent negotiation and coordination
-- **Telemetry & Tracing**: Built-in metrics collection and tracing
-
-## Installation
-
-```bash
-# Install from PyPI (coming soon)
-pip install artcafe-agent-framework
-
-# Install from source
-git clone https://github.com/artcafeai/agent-framework.git
-cd agent-framework
-pip install -e .
-
-# Or install with optional dependencies
-pip install -e ".[llm-providers,dev]"
-```
-
-## Quick Start
-
-### Hello World Example
-
-The absolute simplest way to create an agent:
-
-```python
-from framework import create_agent
-
-# Create and run an agent in 3 lines
-agent = create_agent("my-agent")
-
-@agent.on_message("hello")
-def say_hello(message):
-    return {"response": f"Hello, {message.get('name', 'World')}!"}
-
-agent.run()
-```
-
-### LLM-First Example
-
-Start with an LLM and add capabilities:
+### LLM-Powered Agent
 
 ```python
 from framework import create_llm_agent
@@ -132,42 +70,58 @@ agent = create_llm_agent(provider="anthropic", api_key="your-key")
 @agent.tool
 def search_web(query: str) -> str:
     """Search the web for information."""
-    # Your search implementation
     return f"Search results for: {query}"
 
 # Chat with the agent
 response = await agent.chat("What's the weather in Paris?")
-print(response)
 ```
 
-### Verified Agent Example
+## Key Features
 
-Build reliable agents with verification:
+### 🚀 Core Capabilities
+- **NKey Authentication**: Direct NATS connection with Ed25519 keys
+- **High Performance**: <1ms latency with direct NATS (no WebSocket layer)
+- **Peer Messaging**: All agents are equal peers in the network
+- **Automatic Tenant Isolation**: Subjects automatically prefixed with tenant ID
+- **Built-in Heartbeat**: Connection health monitoring every 30 seconds
+- **Multiple Agent Types**: NATSAgent, SimplifiedAgent, LLM agents, and more
 
-```python
-from framework import VerifiedAgent, verify_input, verify_output
+### Framework Features
+- **Flexible Messaging**: Multiple backends (NATS, memory, pub/sub)
+- **LLM Integration**: Anthropic, OpenAI, and Bedrock providers
+- **Tool Framework**: Easy tool creation with decorators
+- **Workflow Patterns**: Chaining, routing, and parallel execution
+- **MCP Support**: Model Context Protocol integration
+- **A2A Protocol**: Agent-to-Agent communication
+- **Telemetry**: Built-in metrics and tracing
 
-class DataAgent(VerifiedAgent):
-    @verify_input(lambda x: "data" in x)
-    @verify_output(lambda x: x is not None)
-    async def process_data(self, message):
-        # Process with automatic verification
-        return {"processed": message["data"].upper()}
+## Installation
+
+```bash
+# Install from PyPI
+pip install artcafe-agent-framework
+
+# Install from source
+git clone https://github.com/artcafeai/artcafe-agent-framework.git
+cd artcafe-agent-framework
+pip install -e .
+
+# Install with optional dependencies
+pip install -e ".[llm-providers,dev]"
 ```
 
 ## Architecture
 
-The ArtCafe.ai Agent Framework is built on a modular architecture with these key components:
+The framework provides multiple agent implementations:
 
-### Core Components
+- **NATSAgent**: Direct NATS connection with NKey authentication (fastest)
+- **SimplifiedAgent**: WebSocket-based with decorator patterns
+- **HeartbeatAgent**: WebSocket with automatic heartbeat
+- **LLM Agents**: Pre-configured for AI interactions
 
-- **BaseAgent**: Abstract base class that defines the agent lifecycle and messaging patterns
-- **EnhancedAgent**: Extension with integrated messaging, configuration, and advanced features
-- **MessagingInterface**: Abstraction layer for all messaging operations
-- **Provider Pattern**: Support for different messaging backends (in-memory, pub/sub)
-- **LLM Integration**: Pluggable LLM providers (Anthropic, OpenAI, Bedrock)
+Choose the agent type that best fits your use case. For new projects, we recommend `NATSAgent` for its performance and simplicity.
 
-### Directory Structure
+## Directory Structure
 
 ```
 /agent_framework/
@@ -183,53 +137,42 @@ The ArtCafe.ai Agent Framework is built on a modular architecture with these key
 │   ├── messaging/          # Messaging providers
 │   ├── telemetry/          # Metrics and tracing
 │   └── tools/              # Tool decorator and registry
-├── main.py                 # Main entry point
-└── setup_agent.py          # Setup script
+├── examples/               # Example scripts
+└── setup.py                # Package setup
 ```
 
 ## NATS Integration
 
-The framework now supports NATS as a scalable messaging backbone:
+The framework now supports direct NATS connections with NKey authentication:
 
 ```python
-from framework.core import NATSAgent, AgentConfig
+from framework.core.nats_agent import NATSAgent
 
 # Create a NATS-enabled agent
-config = AgentConfig({"nats.servers": ["nats://localhost:4222"]})
-agent = NATSAgent(agent_id="my-agent", config=config)
-
-# Use MCP over NATS
-await agent.call_mcp_tool("remote-server", "search", {"query": "AI news"})
-
-# A2A negotiations
-result = await agent.negotiate_with_agents(
-    ["agent-2", "agent-3"],
-    "task_assignment",
-    {"task": "process_data", "size": "10GB"}
+agent = NATSAgent(
+    client_id="my-agent",
+    tenant_id="your-tenant-id",
+    nkey_seed="your-nkey-seed"
 )
+
+# All subjects are automatically prefixed with tenant_id
+await agent.subscribe("sensors.*", handle_sensor_data)
+await agent.publish("alerts.high", {"temperature": 98.6})
+
+# Request/Response pattern
+response = await agent.request("service.echo", {"message": "hello"})
 ```
 
-See the [NATS Integration Guide](docs/nats_integration.md) for details.
-
-## Advanced Topics
-
-For more advanced usage, check out the example scripts in the `examples/` directory. These demonstrate:
-
-- Building multi-agent systems with NATS
-- Using MCP over NATS and A2A protocols
-- Customizing LLM providers
-- Creating tool libraries
-- Implementing custom messaging backends
-- Integrating with external services
+See the [examples](examples/) directory for more usage patterns.
 
 ## Contributing
 
-We welcome contributions to the Agent Framework! Please see the [Contributing Guide](CONTRIBUTING.md) for details on how to get involved.
+We welcome contributions! Please see [CONTRIBUTING.md](CONTRIBUTING.md) for guidelines.
 
 ## License
 
-This project is licensed under the MIT License - see the [LICENSE](LICENSE) file for details.
+MIT License - see [LICENSE](LICENSE) for details.
 
 ## About ArtCafe.ai
 
-[ArtCafe.ai](https://artcafe.ai) is building the future of AI collaboration by providing tools, frameworks, and infrastructure for creating and deploying intelligent agent systems. Our mission is to make AI agents accessible, composable, and useful for real-world tasks.
+ArtCafe.ai provides infrastructure for building and deploying intelligent agent systems. Our platform enables AI agents to communicate, collaborate, and scale effectively.
