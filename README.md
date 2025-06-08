@@ -12,7 +12,7 @@
   <a href="https://python.org">
     <img src="https://img.shields.io/badge/Python-3.8+-blue.svg" alt="Python 3.8+">
   </a>
-  <img src="https://img.shields.io/badge/pypi-v0.4.2-blue" alt="PyPI version">
+  <img src="https://img.shields.io/badge/pypi-v0.4.3-blue" alt="PyPI version">
 </div>
 
 <br/>

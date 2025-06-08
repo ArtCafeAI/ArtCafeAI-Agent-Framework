@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "artcafe-agent-framework"
-version = "0.4.2"
+version = "0.4.3"
 description = "A flexible, modular framework for building intelligent, collaborative AI agents"
 readme = "README.md"
 license = {file = "LICENSE"}
@@ -36,6 +36,7 @@ dependencies = [
     "websockets>=10.4",
     "tiktoken>=0.3.3",
     "cryptography>=38.0.0",
+    "nats-py>=2.5.0",
 ]
 
 [project.optional-dependencies]

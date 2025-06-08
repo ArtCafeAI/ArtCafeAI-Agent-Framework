@@ -5,6 +5,22 @@ All notable changes to the ArtCafe Agent Framework will be documented in this fi
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.4.3] - 2025-06-08
+
+### Added
+- **NKey Authentication**: Direct NATS connection using Ed25519 NKeys for NATSAgent
+- **Direct NATS Connection**: NATSAgent now connects directly to NATS without WebSocket layer
+- **Automatic Tenant Prefixing**: All subjects automatically prefixed with tenant ID
+- **Built-in Heartbeat**: Automatic heartbeat support for connection health
+
+### Changed
+- **NATSAgent**: Rewritten to use direct NATS connection with NKey authentication
+- **Dependencies**: Added nats-py>=2.5.0 as a core dependency
+- **Performance**: Improved latency by removing WebSocket layer for NATS agents
+
+### Fixed
+- Alignment with cyberforge-demo pattern for consistent agent implementation
+
 ## [0.4.2] - 2025-05-26
 
 ### Added

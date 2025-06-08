@@ -5,7 +5,7 @@ with open("README.md", "r", encoding="utf-8") as fh:
 
 setup(
     name="artcafe-agent",
-    version="0.4.2",
+    version="0.4.3",
     author="ArtCafe Team",
     author_email="support@artcafe.ai",
     description="ArtCafe.ai Agent Framework for building intelligent agents",
